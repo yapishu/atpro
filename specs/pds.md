@@ -38,8 +38,9 @@ Implementation status:
 
 The `%atpro-pds` Gall state contains service configuration, the P-256 signing
 key, repository head and revision, a record index, current blocks and CAR,
-retained signed snapshots, blob metadata, monotonic revision state, and a
-sequenced mutation log. Its sole state type is the single-account `state-0`.
+retained signed snapshots, blob metadata, salted app-password digest, HS256
+session key, active sessions, monotonic revision state, and a sequenced
+mutation log. Its sole state type is the single-account `state-0`.
 
 Blob storage uses the ship's configured `%storage` service and its
 S3-compatible backend. Configuration discovery follows the `%boox` JSON scry
@@ -59,6 +60,8 @@ head.
 Eyre currently serves:
 
 - authenticated PDS configuration and status at `/apps/atpro/pds`;
+- `com.atproto.server.describeServer`, app-password `createSession`, protected
+  `getSession`, rotating `refreshSession`, and revoking `deleteSession`;
 - `com.atproto.repo.describeRepo`, `getRecord`, cursor-based `listRecords`,
   `createRecord`, `putRecord`, `deleteRecord`, atomic `applyWrites`, and binary
   `uploadBlob`;
@@ -68,9 +71,18 @@ Eyre currently serves:
 - commit and record compare-and-swap guards plus retained signed snapshots for
   historical block lookup and revision validation.
 
+Repository mutations and blob uploads accept an authenticated Eyre session or
+a non-expired PDS access JWT. Refresh and deletion require the matching refresh
+JWT. Tokens are HS256 AT JWTs with `sub`, `aud`, `scope`, `jti`, `iat`, and
+`exp` claims. Access tokens last two hours and refresh tokens last ninety days.
+Rotating or deleting a session immediately invalidates its former access token.
+Changing the app password, account DID, handle, or service DID revokes all
+sessions.
+
 The HTTP/authentication checkpoint extends this surface with:
 
-- identity, account, session, and OAuth discovery/token endpoints;
+- OAuth authorization-server discovery, PAR, authorization, and token
+  endpoints;
 - blob-reference verification, untethered-blob expiry, quota enforcement, and
   object deletion;
 - incremental CAR ranges after a retained `since` revision;
@@ -97,7 +109,7 @@ That client role and PDS federation role use separate credentials and queues.
 ## Delivery order
 
 1. add blob reference tracking, untethered cleanup, and CAR/sync range reads;
-2. add account sessions plus OAuth provider endpoints;
+2. add OAuth provider endpoints;
 3. add DID document/service publication and public HTTPS interoperability tests;
 4. add the WebSocket federation edge and Relay interoperability tests;
 5. add backups, account import/export, quotas, abuse controls, and operational

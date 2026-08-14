@@ -18,7 +18,7 @@ The desk supports:
 - image blob upload and image posts;
 - likes, reposts, follows, and notifications;
 - local session refresh and disconnect;
-- explicit AT identity publication and one-shot pals/contact discovery;
+- explicit AT identity publication and one-shot contact discovery;
 - a constrained GET/POST XRPC bridge for authenticated Urbit users;
 - an optional AT Feed Generator served publicly through Eyre;
 - an optional token-protected event webhook and Ames/Gall relay.
@@ -92,8 +92,17 @@ repository commit. Eyre serves `describeRepo`, `getRecord`, `listRecords`,
 `createRecord`, `putRecord`, `deleteRecord`, transactional `applyWrites`,
 `uploadBlob`, `getLatestCommit`, `getRepoStatus`, `listRepos`, CAR `getRepo`,
 CAR `getBlocks`, `getBlob`, and `listBlobs` XRPC methods. Record writes and
-blob uploads require an authenticated Eyre session; repository and blob reads
-are public.
+blob uploads accept either an authenticated Eyre session or a valid PDS access
+token; repository and blob reads are public. The PDS also serves
+`describeServer`, `createSession`, `getSession`, `refreshSession`, and
+`deleteSession`. Access tokens expire after two hours, refresh tokens expire
+after ninety days, refresh rotates both tokens, and deletion revokes the whole
+session.
+
+PDS administration accepts a `serviceDid` and optional `appPassword` alongside
+the origin, account DID, and handle. The password is stored only as a salted
+HMAC-SHA256 digest. The PDS issues standard HS256 AT access and refresh JWTs;
+changing the password or hosted identity revokes every active session.
 
 Blob bytes live in the S3-compatible endpoint selected in the ship's
 `%storage` settings. `%atpro-pds` reads that endpoint, bucket, region, and
@@ -103,9 +112,9 @@ metadata. Both HTTP and HTTPS self-hosted endpoints are supported. The active
 Storage service must expose credentials; browser-only presigned-URL mode does
 not provide Gall with the secret needed for server-side blob reads and writes.
 
-The remaining public-service work covers AT account sessions/OAuth provider
-behavior, blob reference validation and garbage collection, incremental sync
-ranges, DID publication, and the WebSocket federation edge.
+The remaining public-service work covers OAuth provider behavior, blob
+reference validation and garbage collection, incremental sync ranges, DID
+publication, and the WebSocket federation edge.
 
 ## Event relay mode
 
@@ -124,10 +133,10 @@ the settings menu. Other ships read the typed public scry at
 public information as JSON. Disconnecting the AT session does not unpublish
 the identity, and the user can unpublish it at any time.
 
-The “scan pals + contacts” action reads the local `%pals` mutuals and
-`%contacts` book once, checks up to 64 ships for the public identity scry, and
-shows the discovered AT profiles in the find screen. It does not poll or
-automatically follow accounts.
+The “scan contacts” action reads the local `%contacts` book once, checks up to
+64 ships for the public identity scry, and shows the discovered AT profiles in
+the find screen. A ship without Landscape or contacts returns an empty result.
+It does not poll or automatically follow accounts.
 
 ## Build and install
 

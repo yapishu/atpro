@@ -257,21 +257,18 @@
 ++  peer-ships
   |=  [our=@p now=@da]
   ^-  (list @p)
-  =/  pals=(set @p)
-    =/  res=(unit (set @p))
-      %-  mole
-      |.(.^((set @p) %gx /(scot %p our)/pals/(scot %da now)/mutuals/noun))
-    ?~(res ~ u.res)
+  =/  desks=(set @tas)
+    .^((set @tas) %cd /(scot %p our)//(scot %da now))
+  ?.  (~(has in desks) %landscape)  ~
   =/  contacts=(set @p)
-    =/  res=(unit (map * *))
-      %-  mole
-      |.(.^((map * *) %gx /(scot %p our)/contacts/(scot %da now)/v1/book/noun))
-    ?~  res  ~
+    =/  res=(each (map * *) tang)
+      (mule |.(.^((map * *) %gx /(scot %p our)/contacts/(scot %da now)/v1/book/noun)))
+    ?:  ?=(%| -.res)  ~
     %-  silt
-    %+  murn  ~(tap in ~(key by u.res))
+    %+  murn  ~(tap in ~(key by p.res))
     |=(key=* ?@(key (some `@p`key) ~))
   %+  scag  64
-  %+  skim  ~(tap in (~(uni in pals) contacts))
+  %+  skim  ~(tap in contacts)
   |=  ship=@p
   ?&  !=(ship our)
       (lth `@`ship (bex 32))
@@ -280,15 +277,15 @@
 ++  scan-identities-json
   |=  [our=@p now=@da]
   ^-  json
+  =/  peers=(list @p)  (peer-ships our now)
   =/  found=(list [@p at-identity:atpro])
-    %+  murn  (peer-ships our now)
+    %+  murn  peers
     |=  ship=@p
-    =/  result=(unit (unit at-identity:atpro))
-      %-  mole
-      |.(.^((unit at-identity:atpro) %gx /(scot %p ship)/atpro/(scot %da now)/identity/noun))
-    ?~  result  ~
-    ?~  u.result  ~
-    `[ship u.u.result]
+    =/  result=(each (unit at-identity:atpro) tang)
+      (mule |.(.^((unit at-identity:atpro) %gx /(scot %p ship)/atpro/(scot %da now)/identity/noun)))
+    ?:  ?=(%| -.result)  ~
+    ?~  p.result  ~
+    `[ship u.p.result]
   %-  pairs:enjs:format
   :~  :-  'people'
       :-  %a
@@ -300,7 +297,7 @@
           ['handle' s+handle.identity]
           ['confirmedAt' s+(scot %da confirmed-at.identity)]
       ==
-      ['scanned' n+(lent (peer-ships our now))]
+      ['scanned' n+(scot %ud (lent peers))]
   ==
 ::
 ++  parse-password-session

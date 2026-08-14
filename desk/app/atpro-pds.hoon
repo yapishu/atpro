@@ -1,7 +1,7 @@
 ::  Ship-native single-account AT Protocol PDS through Eyre.
 /-  atpro-pds, atpro-repo-types
 /+  atpro-oauth, atpro-repo, atpro-repository, atpro-commit, atpro-tid
-/+  atpro-s3, dbug, default-agent, server
+/+  atpro-s3, atpro-session, dbug, default-agent, server
 |%
 +$  card  card:agent:gall
 +$  blob-request
@@ -40,6 +40,48 @@
   ?~  args  ~
   ?:  =(key key.i.args)  `value.i.args
   $(args t.args)
+::
+++  starts-with
+  |=  [prefix=@t value=@t]
+  ^-  ?
+  =/  pre=tape  (trip prefix)
+  =/  val=tape  (trip value)
+  ?:  (gth (lent pre) (lent val))  %.n
+  =(pre (scag (lent pre) val))
+::
+++  bearer-token
+  |=  headers=header-list:http
+  ^-  (unit @t)
+  =/  authorization=(unit @t)  (get-header:http 'authorization' headers)
+  ?~  authorization  ~
+  ?.  (starts-with 'Bearer ' u.authorization)  ~
+  `(crip (slag 7 (trip u.authorization)))
+::
+++  find-access
+  |=  [token=@t sessions=(map @t pds-session:atpro-pds) now=@ud]
+  ^-  (unit [id=@t session=pds-session:atpro-pds])
+  =/  entries=(list [id=@t session=pds-session:atpro-pds])
+    ~(tap by sessions)
+  |-
+  ?~  entries  ~
+  ?:  ?&  =(token access-jwt.session.i.entries)
+          (gth access-expires.session.i.entries now)
+      ==
+    `i.entries
+  $(entries t.entries)
+::
+++  find-refresh
+  |=  [token=@t sessions=(map @t pds-session:atpro-pds) now=@ud]
+  ^-  (unit [id=@t session=pds-session:atpro-pds])
+  =/  entries=(list [id=@t session=pds-session:atpro-pds])
+    ~(tap by sessions)
+  |-
+  ?~  entries  ~
+  ?:  ?&  =(token refresh-jwt.session.i.entries)
+          (gth refresh-expires.session.i.entries now)
+      ==
+    `i.entries
+  $(entries t.entries)
 ::
 ++  json-ipld
   |=  jon=json
@@ -212,8 +254,66 @@
     `i.blocks
   $(blocks t.blocks)
 ::
+++  make-session
+  |=  $:  config=pds-config:atpro-pds
+          auth=pds-auth:atpro-pds
+          now=@ud
+          entropy=@
+      ==
+  ^-  pds-session:atpro-pds
+  =/  id=@t  (token:atpro-oauth (shas %atpro-pds-session-id entropy))
+  =/  access-id=@t
+    (token:atpro-oauth (shas %atpro-pds-access-id entropy))
+  =/  access-expires=@ud  (add now 7.200)
+  =/  refresh-expires=@ud  (add now 7.776.000)
+  =/  access=@t
+    %-  session-jwt:atpro-session
+    :*  'at+jwt'
+        'com.atproto.access'
+        did.config
+        service-did.config
+        access-id
+        now
+        access-expires
+        jwt-key.auth
+    ==
+  =/  refresh=@t
+    %-  session-jwt:atpro-session
+    :*  'refresh+jwt'
+        'com.atproto.refresh'
+        did.config
+        service-did.config
+        id
+        now
+        refresh-expires
+        jwt-key.auth
+    ==
+  [id access refresh access-expires refresh-expires]
+::
+++  session-json
+  |=  [config=pds-config:atpro-pds session=pds-session:atpro-pds]
+  ^-  json
+  %-  pairs:enjs:format
+  :~  ['accessJwt' s+access-jwt.session]
+      ['refreshJwt' s+refresh-jwt.session]
+      ['handle' s+handle.config]
+      ['did' s+did.config]
+      ['active' b+%.y]
+  ==
+::
+++  account-json
+  |=  config=pds-config:atpro-pds
+  ^-  json
+  %-  pairs:enjs:format
+  :~  ['handle' s+handle.config]
+      ['did' s+did.config]
+      ['active' b+%.y]
+  ==
+::
 ++  config-json
   |=  $:  config=pds-config:atpro-pds
+          auth=pds-auth:atpro-pds
+          sessions=@ud
           records=@ud
           blobs=@ud
           head=(unit cid:atpro-repo-types)
@@ -225,8 +325,11 @@
   %-  pairs:enjs:format
   :~  ['enabled' b+enabled.config]
       ['origin' s+origin.config]
+      ['serviceDid' s+service-did.config]
       ['did' s+did.config]
       ['handle' s+handle.config]
+      ['appPasswordConfigured' b+?=(^ password-hash.auth)]
+      ['sessions' n+(scot %ud sessions)]
       ['signingKey' s+(did-key:atpro-commit private-key.config)]
       ['records' n+(scot %ud records)]
       ['blobs' n+(scot %ud blobs)]
@@ -250,7 +353,18 @@
 ++  on-init
   ^-  (quip card _this)
   =/  key=@  (make-private-key:atpro-oauth (shas %atpro-pds-key eny.bowl))
-  =.  state  [%0 [%.n '' '' '' key (mod eny.bowl 32)] *(map @t stored-record:atpro-pds) *(map @t stored-blob:atpro-pds) ~ ~ ~ ~ [0 0] ~ 0 ~]
+  =/  salt=@  (shas %atpro-pds-password-salt eny.bowl)
+  =/  jwt-key=@  (shas %atpro-pds-jwt-key eny.bowl)
+  =.  state
+    :*  %0
+        [%.n '' '' '' '' key (mod eny.bowl 32)]
+        [salt ~ jwt-key]
+        *(map @t pds-session:atpro-pds)
+        0
+        *(map @t stored-record:atpro-pds)
+        *(map @t stored-blob:atpro-pds)
+        ~  ~  ~  ~  [0 0]  ~  0  ~
+    ==
   :_  this
   :~  [%pass /eyre/xrpc %arvo %e %connect [~ /xrpc] dap.bowl]
       [%pass /eyre/admin %arvo %e %connect [~ /apps/atpro/pds] dap.bowl]
@@ -375,7 +489,7 @@
       ?:  ?&  ?=(%'GET' method.request.req)
               ?=([%status ~] t.t.t.site)
           ==
-        (reply eyre-id (json-payload 200 (config-json config (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
+        (reply eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
       ?.  ?&  ?=(%'POST' method.request.req)
               ?=([%configure ~] t.t.t.site)
           ==
@@ -384,21 +498,108 @@
       ?~  jon  (reply eyre-id (error-json 400 'InvalidRequest' 'invalid JSON body'))
       =/  enabled=(unit ?)  (bool-at 'enabled' u.jon)
       =/  origin=(unit @t)  (string-at 'origin' u.jon)
+      =/  service-did=(unit @t)  (string-at 'serviceDid' u.jon)
       =/  did=(unit @t)  (string-at 'did' u.jon)
       =/  handle=(unit @t)  (string-at 'handle' u.jon)
+      =/  password=(unit @t)  (string-at 'appPassword' u.jon)
+      =/  clear-password=(unit ?)  (bool-at 'clearAppPassword' u.jon)
       ?~  enabled  (reply eyre-id (error-json 400 'InvalidRequest' 'missing enabled'))
       ?~  origin  (reply eyre-id (error-json 400 'InvalidRequest' 'missing origin'))
+      ?~  service-did  (reply eyre-id (error-json 400 'InvalidRequest' 'missing serviceDid'))
       ?~  did  (reply eyre-id (error-json 400 'InvalidRequest' 'missing did'))
       ?~  handle  (reply eyre-id (error-json 400 'InvalidRequest' 'missing handle'))
-      =.  config  [u.enabled u.origin u.did u.handle private-key.config clock.config]
+      ?:  ?&  ?=(^ password)
+              |((lth (met 3 u.password) 8) (gth (met 3 u.password) 256))
+          ==
+        (reply eyre-id (error-json 400 'InvalidRequest' 'appPassword must be 8 to 256 bytes'))
+      =/  identity-changed=?
+        ?|  !=(u.service-did service-did.config)
+            !=(u.did did.config)
+            !=(u.handle handle.config)
+        ==
+      =/  clear=?  ?&(?=(^ clear-password) u.clear-password)
+      =.  config
+        [u.enabled u.origin u.service-did u.did u.handle private-key.config clock.config]
+      =?  auth  ?=(^ password)
+        auth(password-hash `(password-digest:atpro-session password-salt.auth u.password))
+      =?  auth  clear
+        auth(password-hash ~)
+      =?  sessions  |(identity-changed ?=(^ password) clear)
+        ~
       =?  this  &(u.enabled ?=(~ head))  (rebuild %init '')
-      (reply eyre-id (json-payload 200 (config-json config (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
+      (reply eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
     ?.  enabled.config
       (reply eyre-id (error-json 503 'ServiceUnavailable' 'PDS is disabled'))
     ?.  =('xrpc' i.site)
       (reply eyre-id (error-json 404 'NotFound' 'not found'))
     ?~  t.site  (reply eyre-id (error-json 404 'XRPCNotSupported' 'missing method'))
     =/  method=@t  i.t.site
+    =/  unix-now=@ud  (unix-seconds:atpro-oauth now.bowl)
+    =/  bearer=(unit @t)
+      (bearer-token header-list.request.req)
+    =/  access=(unit [id=@t session=pds-session:atpro-pds])
+      ?~(bearer ~ (find-access u.bearer sessions unix-now))
+    =/  refresh=(unit [id=@t session=pds-session:atpro-pds])
+      ?~(bearer ~ (find-refresh u.bearer sessions unix-now))
+    ?:  =('com.atproto.server.describeServer' method)
+      ?.  ?=(%'GET' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      =/  jon=json
+        %-  pairs:enjs:format
+        :~  ['did' s+service-did.config]
+            ['availableUserDomains' a+~]
+            ['inviteCodeRequired' b+%.n]
+            ['phoneVerificationRequired' b+%.n]
+            ['blobUploadLimit' n+'52428800']
+        ==
+      (reply eyre-id (json-payload 200 jon))
+    ?:  =('com.atproto.server.createSession' method)
+      ?.  ?=(%'POST' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      =/  jon=(unit json)  (parse-body req)
+      ?~  jon
+        (reply eyre-id (error-json 400 'InvalidRequest' 'invalid JSON body'))
+      =/  identifier=(unit @t)  (string-at 'identifier' u.jon)
+      =/  password=(unit @t)  (string-at 'password' u.jon)
+      ?.  ?&  ?=(^ identifier)
+              ?|(=(u.identifier did.config) =(u.identifier handle.config))
+          ==
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'invalid identifier or password'))
+      ?~  password
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'invalid identifier or password'))
+      ?~  password-hash.auth
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'app-password sessions are not configured'))
+      ?.  =(u.password-hash.auth (password-digest:atpro-session password-salt.auth u.password))
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'invalid identifier or password'))
+      =/  created=pds-session:atpro-pds
+        (make-session config auth unix-now (cat 3 eny.bowl session-count))
+      =.  session-count  +(session-count)
+      =.  sessions  (~(put by sessions) id.created created)
+      (reply eyre-id (json-payload 200 (session-json config created)))
+    ?:  =('com.atproto.server.getSession' method)
+      ?.  ?=(%'GET' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      ?~  access
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'valid access token required'))
+      (reply eyre-id (json-payload 200 (account-json config)))
+    ?:  =('com.atproto.server.refreshSession' method)
+      ?.  ?=(%'POST' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      ?~  refresh
+        (reply eyre-id (error-json 400 'InvalidToken' 'valid refresh token required'))
+      =/  created=pds-session:atpro-pds
+        (make-session config auth unix-now (cat 3 eny.bowl session-count))
+      =.  session-count  +(session-count)
+      =.  sessions  (~(del by sessions) id.u.refresh)
+      =.  sessions  (~(put by sessions) id.created created)
+      (reply eyre-id (json-payload 200 (session-json config created)))
+    ?:  =('com.atproto.server.deleteSession' method)
+      ?.  ?=(%'POST' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      ?~  refresh
+        (reply eyre-id (error-json 400 'InvalidToken' 'valid refresh token required'))
+      =.  sessions  (~(del by sessions) id.u.refresh)
+      (reply eyre-id (json-payload 200 ~))
     ?:  =('com.atproto.repo.describeRepo' method)
       =/  requested=(unit @t)  (arg-at 'repo' args.rl)
       ?.  ?&  ?=(^ requested)
@@ -581,7 +782,7 @@
       (reply eyre-id (json-payload 200 (pairs:enjs:format fields)))
     ?.  ?=(%'POST' method.request.req)
       (reply eyre-id (error-json 404 'XRPCNotSupported' 'method not supported'))
-    ?.  authenticated.req
+    ?.  |(authenticated.req ?=(^ access))
       (reply eyre-id (error-json 401 'AuthenticationRequired' 'write authentication required'))
     ?:  =('com.atproto.repo.uploadBlob' method)
       ?~  body.request.req
@@ -674,7 +875,7 @@
   ^-  (unit (unit cage))
   ?+  path  [~ ~]
       [%x %status ~]
-    ``json+!>((config-json config (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history)))
+    ``json+!>((config-json config auth (lent ~(tap by sessions)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history)))
   ==
 ::
 ++  on-leave  on-leave:def

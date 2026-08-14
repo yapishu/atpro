@@ -81,7 +81,7 @@ cross the Gall/browser boundary.
   reposts in the browser client;
 - one refresh-and-retry after an authenticated PDS request returns 401;
 - explicit public handle/DID publication through Gall scry and one-shot
-  discovery across `%pals` and `%contacts`;
+  discovery across `%contacts`, with an empty result when Landscape is absent;
 - binary-safe image upload and image post composition;
 - a bounded token-protected event webhook with allowlisted Ames distribution;
 - a separate `state-0` Feed Generator agent with public Eyre XRPC endpoints,
@@ -90,7 +90,8 @@ cross the Gall/browser boundary.
 - a separate `state-0` PDS agent with canonical repository encoding, upstream
   MST vectors, P-256 signed commits, monotonic revisions, retained CAR
   snapshots, compare-and-swap writes, S3-compatible blob upload/download via
-  the ship's `%storage` settings, and repository/sync XRPC methods.
+  the ship's `%storage` settings, app-password sessions with rotating HS256
+  JWTs, Bearer-authenticated writes, and repository/sync XRPC methods.
 
 ## Roadmap
 
@@ -98,7 +99,7 @@ cross the Gall/browser boundary.
    destination and NSID policy as HTTP.
 2. Add PDS blob reference validation, untethered cleanup, and incremental CAR
    ranges.
-3. Add account sessions, OAuth provider behavior, and DID service lifecycle.
+3. Add OAuth provider behavior and DID service lifecycle.
 4. Pair the Eyre sync HTTP surface with a small WebSocket edge for
    `com.atproto.sync.subscribeRepos` federation.
 

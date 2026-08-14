@@ -176,7 +176,7 @@
             <div id="identityStatus" class="meta">AT identity is not published</div>
             <button id="publishIdentity" class="ghost" type="button">publish AT identity</button>
             <button id="clearIdentity" class="ghost" type="button">unpublish AT identity</button>
-            <button id="scanFriends" class="ghost" type="button">scan pals + contacts</button>
+            <button id="scanFriends" class="ghost" type="button">scan contacts</button>
             <button id="logout" class="danger" type="button">disconnect</button>
             <label class="setting-option"><input id="darkMode" type="checkbox">dark appearance</label>
             <button id="systemTheme" class="ghost" type="button">follow system appearance</button>
@@ -577,10 +577,10 @@
       try {
         const result = await api('identity/scan', {});
         showView('search');
-        $('#searchResults').innerHTML = result.people?.length ? result.people.map(person => `<article class="person" data-actor="${escapeHtml(person.did)}"><div class="avatar"></div><div><div class="name">@${escapeHtml(person.handle)}</div><div class="handle">${escapeHtml(person.ship)} · confirmed on ship</div><div class="bio">${escapeHtml(person.did)}</div></div></article>`).join('') : `<div class="empty">No published AT identities found among ${result.scanned || 0} pals and contacts.</div>`;
+        $('#searchResults').innerHTML = result.people?.length ? result.people.map(person => `<article class="person" data-actor="${escapeHtml(person.did)}"><div class="avatar"></div><div><div class="name">@${escapeHtml(person.handle)}</div><div class="handle">${escapeHtml(person.ship)} · confirmed on ship</div><div class="bio">${escapeHtml(person.did)}</div></div></article>`).join('') : `<div class="empty">No published AT identities found among ${result.scanned || 0} contacts.</div>`;
         notice(`Found ${result.people?.length || 0} of ${result.scanned || 0} scanned ships`);
       } catch (e) { notice(e.message, true); }
-      finally { button.disabled = false; button.textContent = 'scan pals + contacts'; }
+      finally { button.disabled = false; button.textContent = 'scan contacts'; }
     });
     $('#logout').addEventListener('click', async () => { try { setSession(await api('logout', {})); } catch (e) { notice(e.message, true); } });
     $('#postText').addEventListener('input', event => $('#postCount').textContent = `${event.target.value.length} / 300`);

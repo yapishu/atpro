@@ -3,10 +3,23 @@
 +$  pds-config
   $:  enabled=?
       origin=@t
+      service-did=@t
       did=@t
       handle=@t
       private-key=@
       clock=@ud
+  ==
++$  pds-auth
+  $:  password-salt=@
+      password-hash=(unit @)
+      jwt-key=@
+  ==
++$  pds-session
+  $:  id=@t
+      access-jwt=@t
+      refresh-jwt=@t
+      access-expires=@ud
+      refresh-expires=@ud
   ==
 +$  stored-record
   $:  key=@t
@@ -41,6 +54,9 @@
 +$  state-0
   $:  %0
       config=pds-config
+      auth=pds-auth
+      sessions=(map @t pds-session)
+      session-count=@ud
       records=(map @t stored-record)
       blobs=(map @t stored-blob)
       head=(unit cid:atpro-repo-types)
