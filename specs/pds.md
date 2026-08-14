@@ -18,7 +18,7 @@ The repository library is independent of Gall and has deterministic fixtures:
 5. signed commit objects using a DID-authorized P-256 or secp256k1 key;
 6. commit diffs and monotonic repository revisions.
 
-Upstream vectors from `../atproto` are the compatibility oracle. Every encoded
+Upstream vectors from `../atproto` are the conformance oracle. Every encoded
 block, CID, MST root, commit signature, and CAR export is compared byte-for-byte
 where the upstream fixtures make that possible.
 
@@ -26,9 +26,12 @@ where the upstream fixtures make that possible.
 
 The Gall state contains service configuration, account metadata, repository
 heads, record indexes, blob metadata, session grants, and the federation
-sequence cursor. Large CARs and blobs use Clay or a configured object-storage
-backend; Gall retains hashes, ownership, references, MIME type, size, and
-garbage-collection state.
+sequence cursor. Large CARs and blobs use the ship's configured `%storage`
+service and its S3-compatible backend, with ship-local storage available for
+small installations. Gall retains hashes, ownership, references, MIME type,
+size, quota, and garbage-collection state. The integration follows `%boox`'s
+configuration discovery while keeping storage credentials behind the ship
+boundary.
 
 Repository mutation is transactional: validate the Lexicon-shaped record,
 write referenced blocks, build the new MST, sign one commit, advance the head,
@@ -47,8 +50,8 @@ Eyre serves the standard PDS surfaces:
   origin.
 
 OAuth uses the same PKCE, PAR, DPoP, and nonce rules as the client, with the
-ship acting as authorization server and protected resource. App-password
-sessions can remain an operator-controlled compatibility option.
+ship acting as authorization server and protected resource. Operators can
+also enable app-password sessions.
 
 ## Federation edge
 
@@ -70,5 +73,5 @@ That client role and PDS federation role use separate credentials and queues.
 4. account sessions plus OAuth provider endpoints;
 5. public HTTPS PDS service through Eyre;
 6. WebSocket federation edge and Relay interoperability tests;
-7. backups, import/export, migration, quotas, abuse controls, and operational
+7. backups, account import/export, quotas, abuse controls, and operational
    health surfaces.

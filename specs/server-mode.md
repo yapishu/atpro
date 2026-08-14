@@ -29,7 +29,7 @@ A network-valid PDS includes:
 4. blob upload, retrieval, reference tracking, and quotas;
 5. account/session, handle, DID, and PLC operation lifecycles;
 6. sequenced federation events and reliable Relay crawling availability;
-7. abuse controls, backups, recovery, and migration semantics.
+7. abuse controls, backups, recovery, and account export/import.
 
 Eyre serves the HTTP endpoints. The PDS implementation proceeds from an
 offline repository library and conformance fixtures to read-only sync, then
@@ -48,8 +48,7 @@ AT Relay -> Tap/Jetstream gateway ship -> Ames/Gall subscriptions -> ships
 The Ames mark carries only a validated envelope:
 
 ```text
-[%at-event source=@t cursor=@t did=@t collection=@t rkey=@t operation=?]
-[%curate feed=@t post=@t added=?]
+[%atpro-event source=@t cursor=@t did=@t collection=@t rkey=@t operation=@t received=@da]
 ```
 
 Each relay deduplicates by source/cursor and applies a bounded queue. The

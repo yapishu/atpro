@@ -18,8 +18,9 @@ The desk supports:
 - image blob upload and image posts;
 - likes, reposts, follows, and notifications;
 - local session refresh and disconnect;
-- a constrained GET/POST XRPC bridge for authenticated Urbit users.
-- an optional AT Feed Generator served publicly through Eyre.
+- explicit AT identity publication and one-shot pals/contact discovery;
+- a constrained GET/POST XRPC bridge for authenticated Urbit users;
+- an optional AT Feed Generator served publicly through Eyre;
 - an optional token-protected event webhook and Ames/Gall relay.
 
 ## Architecture
@@ -84,6 +85,19 @@ kept in a bounded queue, and published as `%atpro-event` facts on `/events`.
 An allowlist controls downstream Ames subscribers; an optional upstream ship
 turns an instance into a follower of another `%atpro-relay` gateway.
 
+## Ship identity discovery
+
+A connected user can explicitly publish the confirmed AT handle/DID pair from
+the settings menu. Other ships read the typed public scry at
+`/=atpro=/identity/noun`; `/=atpro=/identity-json/json` provides the same
+public information as JSON. Disconnecting the AT session does not unpublish
+the identity, and the user can unpublish it at any time.
+
+The “scan pals + contacts” action reads the local `%pals` mutuals and
+`%contacts` book once, checks up to 64 ships for the public identity scry, and
+shows the discovered AT profiles in the find screen. It does not poll or
+automatically follow accounts.
+
 ## Build and install
 
 The build requires Zig 0.15.2 and Git 2.25 or newer.
@@ -101,12 +115,12 @@ Commit the mounted desk and install it from the ship:
 ```
 
 Open `/apps/atpro/` on the ship. During greenfield development, edit
-`state-0` directly and nuke/reinstall the affected agent after a schema change;
-there are no migration versions in this desk.
+`state-0` directly and nuke/reinstall the affected agent after a schema change.
 
 ## HTTP API
 
-All routes require an authenticated Eyre session.
+Client and administration routes require an authenticated Eyre session. The
+OAuth callback and client metadata routes are public by protocol design.
 
 - `GET /apps/atpro/api/status`
 - `POST /apps/atpro/api/login`
@@ -117,6 +131,10 @@ All routes require an authenticated Eyre session.
 - `POST /apps/atpro/api/oauth/start`
 - `GET /apps/atpro/api/oauth/callback`
 - `GET /apps/atpro/api/oauth/client-metadata`
+- `GET /apps/atpro/api/identity`
+- `POST /apps/atpro/api/identity/publish`
+- `POST /apps/atpro/api/identity/clear`
+- `POST /apps/atpro/api/identity/scan`
 
 The RPC body is `{target, method, nsid, query?, body?}`. `target` is `public`
 or `pds`, and `method` is `GET` or `POST`.

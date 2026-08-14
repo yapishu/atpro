@@ -60,11 +60,18 @@
       body=(unit octs)
   ==
 ::
++$  at-identity
+  $:  did=@t
+      handle=@t
+      confirmed-at=@da
+  ==
+::
 +$  state-0
   $:  %0
       account=(unit session)
       oauth-client=(unit oauth-client)
       pending=(map @t pending-auth)
+      public-identity=(unit at-identity)
   ==
 ::
 +$  request-kind

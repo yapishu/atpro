@@ -173,6 +173,10 @@
             <strong id="accountHandle"></strong>
             <div id="accountDid" class="meta"></div>
             <button id="refreshSession" class="ghost" type="button">refresh session</button>
+            <div id="identityStatus" class="meta">AT identity is not published</div>
+            <button id="publishIdentity" class="ghost" type="button">publish AT identity</button>
+            <button id="clearIdentity" class="ghost" type="button">unpublish AT identity</button>
+            <button id="scanFriends" class="ghost" type="button">scan pals + contacts</button>
             <button id="logout" class="danger" type="button">disconnect</button>
             <label class="setting-option"><input id="darkMode" type="checkbox">dark appearance</label>
             <button id="systemTheme" class="ghost" type="button">follow system appearance</button>
@@ -336,6 +340,10 @@
         $('#accountDid').textContent = account.did;
         $('#oauthNote').textContent = account.auth === 'oauth' ? 'connected with OAuth + DPoP' : 'connected with an app password';
       }
+    }
+    function setIdentity(identity) {
+      $('#identityStatus').textContent = identity?.published ? `public: @${identity.handle}` : 'AT identity is not published';
+      $('#clearIdentity').hidden = !identity?.published;
     }
     function timeAgo(date) {
       const seconds = Math.max(1, (Date.now() - new Date(date).getTime()) / 1000);
@@ -562,6 +570,18 @@
       if (cursor && currentGraph) loadGraph(currentGraph.actor, currentGraph.kind, cursor, true);
     });
     $('#refreshSession').addEventListener('click', async () => { try { setSession(await api('refresh', {})); notice('Session refreshed'); } catch (e) { notice(e.message, true); } });
+    $('#publishIdentity').addEventListener('click', async () => { try { setIdentity(await api('identity/publish', {})); notice('AT identity published to the Ames scry namespace'); } catch (e) { notice(e.message, true); } });
+    $('#clearIdentity').addEventListener('click', async () => { try { setIdentity(await api('identity/clear', {})); notice('AT identity unpublished'); } catch (e) { notice(e.message, true); } });
+    $('#scanFriends').addEventListener('click', async event => {
+      const button = event.currentTarget; button.disabled = true; button.textContent = 'scanning…';
+      try {
+        const result = await api('identity/scan', {});
+        showView('search');
+        $('#searchResults').innerHTML = result.people?.length ? result.people.map(person => `<article class="person" data-actor="${escapeHtml(person.did)}"><div class="avatar"></div><div><div class="name">@${escapeHtml(person.handle)}</div><div class="handle">${escapeHtml(person.ship)} · confirmed on ship</div><div class="bio">${escapeHtml(person.did)}</div></div></article>`).join('') : `<div class="empty">No published AT identities found among ${result.scanned || 0} pals and contacts.</div>`;
+        notice(`Found ${result.people?.length || 0} of ${result.scanned || 0} scanned ships`);
+      } catch (e) { notice(e.message, true); }
+      finally { button.disabled = false; button.textContent = 'scan pals + contacts'; }
+    });
     $('#logout').addEventListener('click', async () => { try { setSession(await api('logout', {})); } catch (e) { notice(e.message, true); } });
     $('#postText').addEventListener('input', event => $('#postCount').textContent = `${event.target.value.length} / 300`);
     $('#replyText').addEventListener('input', event => $('#replyCount').textContent = `${event.target.value.length} / 300`);
@@ -679,7 +699,10 @@
       $('#appPasswordPanel').open = !oauthToggle.checked;
       $('#oauthNote').textContent = oauthCapable ? 'OAuth + DPoP available' : 'OAuth requires HTTPS';
       oauthToggle.addEventListener('change', () => { localStorage.setItem('atpro-prefer-oauth', String(oauthToggle.checked)); $('#appPasswordPanel').open = !oauthToggle.checked; });
-      try { const session = await api('status'); setSession(session); if (session.connected) await loadTimeline(); }
+      try {
+        const [session, identity] = await Promise.all([api('status'), api('identity')]);
+        setSession(session); setIdentity(identity); if (session.connected) await loadTimeline();
+      }
       catch (error) { $('#statusText').textContent = 'Ship API unavailable'; $('#connectScreen').hidden = false; notice(error.message, true); }
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
     })();

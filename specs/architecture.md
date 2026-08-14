@@ -14,9 +14,9 @@ make those calls directly, so a Gall agent can act as a normal client:
 4. create records such as posts, likes, follows, and profile updates;
 5. upload blobs and perform repository sync/catch-up work over HTTP.
 
-The current implementation deliberately exposes only GET and POST JSON XRPC.
-Blob transfers and CAR repository sync need explicit binary-safe routes rather
-than being squeezed through this JSON bridge.
+The constrained bridge exposes GET and POST JSON XRPC. Image blobs use a
+separate binary-safe upload route, and CAR repository sync uses dedicated PDS
+routes rather than passing through the JSON bridge.
 
 ## Network model
 
@@ -80,6 +80,10 @@ cross the Gall/browser boundary.
 - profiles, author feeds, threads, replies, notifications, follows, likes, and
   reposts in the browser client;
 - one refresh-and-retry after an authenticated PDS request returns 401;
+- explicit public handle/DID publication through Gall scry and one-shot
+  discovery across `%pals` and `%contacts`;
+- binary-safe image upload and image post composition;
+- a bounded token-protected event webhook with allowlisted Ames distribution;
 - a separate `state-0` Feed Generator agent with public Eyre XRPC endpoints,
   DID document caching, authenticated configuration, curated posts, and cursor
   pagination.
@@ -90,8 +94,9 @@ cross the Gall/browser boundary.
    destination and NSID policy as HTTP.
 2. Build the PDS repository core: DAG-CBOR, CID/CAR, MST, signed commits, and
    conformance vectors.
-3. Add blob storage, repository/account XRPC, OAuth provider behavior, and DID
-   service/key lifecycle.
+3. Add blob storage through the ship's configured `%storage` service,
+   repository/account XRPC, OAuth provider behavior, and DID service/key
+   lifecycle.
 4. Expose sync HTTP through Eyre and pair it with a small WebSocket edge for
    `com.atproto.sync.subscribeRepos` federation.
 

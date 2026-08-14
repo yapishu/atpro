@@ -242,6 +242,67 @@
       ['auth' s+?~(oauth.u.account 'app-password' 'oauth')]
   ==
 ::
+++  identity-json
+  |=  identity=(unit at-identity:atpro)
+  ^-  json
+  ?~  identity
+    (pairs:enjs:format ~[['published' b+%.n]])
+  %-  pairs:enjs:format
+  :~  ['published' b+%.y]
+      ['did' s+did.u.identity]
+      ['handle' s+handle.u.identity]
+      ['confirmedAt' s+(scot %da confirmed-at.u.identity)]
+  ==
+::
+++  peer-ships
+  |=  [our=@p now=@da]
+  ^-  (list @p)
+  =/  pals=(set @p)
+    =/  res=(unit (set @p))
+      %-  mole
+      |.(.^((set @p) %gx /(scot %p our)/pals/(scot %da now)/mutuals/noun))
+    ?~(res ~ u.res)
+  =/  contacts=(set @p)
+    =/  res=(unit (map * *))
+      %-  mole
+      |.(.^((map * *) %gx /(scot %p our)/contacts/(scot %da now)/v1/book/noun))
+    ?~  res  ~
+    %-  silt
+    %+  murn  ~(tap in ~(key by u.res))
+    |=(key=* ?@(key (some `@p`key) ~))
+  %+  scag  64
+  %+  skim  ~(tap in (~(uni in pals) contacts))
+  |=  ship=@p
+  ?&  !=(ship our)
+      (lth `@`ship (bex 32))
+  ==
+::
+++  scan-identities-json
+  |=  [our=@p now=@da]
+  ^-  json
+  =/  found=(list [@p at-identity:atpro])
+    %+  murn  (peer-ships our now)
+    |=  ship=@p
+    =/  result=(unit (unit at-identity:atpro))
+      %-  mole
+      |.(.^((unit at-identity:atpro) %gx /(scot %p ship)/atpro/(scot %da now)/identity/noun))
+    ?~  result  ~
+    ?~  u.result  ~
+    `[ship u.u.result]
+  %-  pairs:enjs:format
+  :~  :-  'people'
+      :-  %a
+      %+  turn  found
+      |=  [ship=@p identity=at-identity:atpro]
+      %-  pairs:enjs:format
+      :~  ['ship' s+(scot %p ship)]
+          ['did' s+did.identity]
+          ['handle' s+handle.identity]
+          ['confirmedAt' s+(scot %da confirmed-at.identity)]
+      ==
+      ['scanned' n+(lent (peer-ships our now))]
+  ==
+::
 ++  parse-password-session
   |=  [service=@t body=@t]
   ^-  (unit session:atpro)
@@ -629,6 +690,9 @@
   ?:  ?&  ?=(%'GET' method.request.req)  ?=([%status ~] route)  ==
     :_  this
     (give-simple-payload:app:server eyre-id (json-payload 200 (session-json account)))
+  ?:  ?&  ?=(%'GET' method.request.req)  ?=([%identity ~] route)  ==
+    :_  this
+    (give-simple-payload:app:server eyre-id (json-payload 200 (identity-json public-identity)))
   ?.  ?=(%'POST' method.request.req)
     :_  this
     (give-simple-payload:app:server eyre-id (error-json 405 'method not allowed'))
@@ -640,6 +704,20 @@
     (refresh-request eyre-id)
   ?:  ?=([%blob ~] route)
     (blob-request eyre-id req)
+  ?:  ?=([%identity %publish ~] route)
+    ?~  account
+      :_  this
+      (give-simple-payload:app:server eyre-id (error-json 409 'connect an AT Protocol account first'))
+    =.  public-identity  `[did.u.account handle.u.account now.bowl]
+    :_  this
+    (give-simple-payload:app:server eyre-id (json-payload 200 (identity-json public-identity)))
+  ?:  ?=([%identity %clear ~] route)
+    =.  public-identity  ~
+    :_  this
+    (give-simple-payload:app:server eyre-id (json-payload 200 (identity-json public-identity)))
+  ?:  ?=([%identity %scan ~] route)
+    :_  this
+    (give-simple-payload:app:server eyre-id (json-payload 200 (scan-identities-json our.bowl now.bowl)))
   ?~  body.request.req
     :_  this
     (give-simple-payload:app:server eyre-id (error-json 400 'missing JSON body'))
@@ -666,6 +744,8 @@
   ^-  (unit (unit cage))
   ?+  path  [~ ~]
       [%x %status ~]  ``json+!>((session-json account))
+      [%x %identity ~]       ``noun+!>(public-identity)
+      [%x %identity-json ~]  ``json+!>((identity-json public-identity))
   ==
 ::
 ++  on-leave  on-leave:def
