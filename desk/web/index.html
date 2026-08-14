@@ -13,6 +13,7 @@
     :root[data-theme="light"] { color-scheme:light; --paper:#f3f0e7; --panel:#f8f6ef; --ink:#161613; --quiet:#69685f; --line:#a6a298; --wash:#e7e3d8; --signal:#275b4d; --bad:#8c2d22; }
     :root[data-theme="dark"] { color-scheme:dark; --paper:#171815; --panel:#1d1f1b; --ink:#e9e5d9; --quiet:#aaa79d; --line:#55584f; --wash:#282b25; --signal:#77b7a3; --bad:#e18376; }
     * { box-sizing:border-box }
+    [hidden] { display:none !important }
     html { background:var(--paper) }
     body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper); font:14px/1.5 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace }
     button,input,textarea { border-radius:0; font:inherit }
@@ -66,6 +67,10 @@
     textarea { min-height:128px; resize:vertical }
     .connect .primary { width:100%; margin-top:18px; padding:9px }
     .hint { color:var(--quiet); font-size:10px; margin-top:13px }
+    .alternate-auth { margin-top:20px; padding-top:14px; border-top:1px dotted var(--line) }
+    .alternate-auth summary { color:var(--quiet); cursor:pointer; font-size:11px; list-style:none }
+    .alternate-auth summary::before { content:'+ '; color:var(--signal) }
+    .alternate-auth[open] summary::before { content:'- ' }
     .view { display:none }
     .view.active { display:block }
     .feed { min-height:200px }
@@ -134,17 +139,25 @@
     <section id="connectScreen" class="panel connect" hidden>
       <div class="eyebrow">Connect a PDS</div>
       <h2>Your social world, ship-side.</h2>
-      <p>Connect with a Bluesky app password. Credentials and session tokens remain inside your Urbit agent.</p>
-      <form id="loginForm">
-        <label for="identifier">Handle or DID</label>
-        <input id="identifier" name="identifier" autocomplete="username" placeholder="alice.bsky.social" required>
+      <p>Authorize %atpro with your handle. OAuth keys and session tokens remain inside your Urbit agent.</p>
+      <form id="oauthForm">
+        <label for="oauthIdentifier">Handle or DID</label>
+        <input id="oauthIdentifier" name="identifier" autocomplete="username" placeholder="alice.bsky.social" required>
+        <button class="primary" type="submit">Authorize with OAuth</button>
+      </form>
+      <details id="appPasswordPanel" class="alternate-auth">
+        <summary>use an app password instead</summary>
+        <form id="loginForm">
+        <label for="passwordIdentifier">Handle or DID</label>
+        <input id="passwordIdentifier" name="identifier" autocomplete="username" placeholder="alice.bsky.social" required>
         <label for="password">App password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" placeholder="xxxx-xxxx-xxxx-xxxx" required>
         <label for="service">PDS service</label>
         <input id="service" name="service" type="url" value="https://bsky.social" required>
         <button class="primary" type="submit">Connect through ship</button>
-      </form>
-      <div class="hint">Create an app password in Bluesky → Settings → Privacy and security → App passwords. Your main password is not recommended.</div>
+        </form>
+        <div class="hint">Create an app password in Bluesky → Settings → Privacy and security → App passwords. Your main password is not recommended.</div>
+      </details>
     </section>
 
     <section id="client" class="layout" hidden>
@@ -163,7 +176,7 @@
             <button id="logout" class="danger" type="button">disconnect</button>
             <label class="setting-option"><input id="darkMode" type="checkbox">dark appearance</label>
             <button id="systemTheme" class="ghost" type="button">follow system appearance</button>
-            <label class="setting-option"><input id="oauthPreference" type="checkbox">prefer OAuth on HTTPS</label>
+            <label class="setting-option"><input id="oauthPreference" type="checkbox">use OAuth when available</label>
             <div id="oauthNote" class="meta"></div>
           </div>
         </details>
@@ -186,6 +199,8 @@
           <div class="section-head"><h2>new post</h2></div>
           <form id="postForm" class="form-body">
             <textarea id="postText" maxlength="300" placeholder="What’s happening?" required></textarea>
+            <label for="postImages">images (up to 4)</label>
+            <input id="postImages" type="file" accept="image/*" multiple>
             <div class="form-row"><span id="postCount" class="count">0 / 300</span><button class="primary">Publish</button></div>
           </form>
         </section>
@@ -269,6 +284,14 @@
       if (!response.ok) throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
       return data;
     }
+    async function uploadBlob(file) {
+      const response = await fetch(`${API}/blob`, {method:'POST', credentials:'same-origin', headers:{'content-type':file.type || 'application/octet-stream'}, body:file});
+      const text = await response.text(); let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = {error:text || `HTTP ${response.status}`}; }
+      if (!response.ok) { const error = new Error(data?.message || data?.error || `HTTP ${response.status}`); error.status = response.status; throw error; }
+      if (!data?.blob) throw new Error('PDS did not return an uploaded blob');
+      return data.blob;
+    }
     async function rpc(target, method, nsid, query = '', body, retry = true) {
       try { return await api('rpc', {target, method, nsid, query, ...(body === undefined ? {} : {body})}); }
       catch (error) {
@@ -289,6 +312,7 @@
       if (account) {
         $('#accountHandle').textContent = `@${account.handle}`;
         $('#accountDid').textContent = account.did;
+        $('#oauthNote').textContent = account.auth === 'oauth' ? 'connected with OAuth + DPoP' : 'connected with an app password';
       }
     }
     function timeAgo(date) {
@@ -485,6 +509,15 @@
       } catch (error) { notice(error.message, true); }
       finally { button.disabled = false; button.textContent = 'Connect through ship'; }
     });
+    $('#oauthForm').addEventListener('submit', async event => {
+      event.preventDefault(); const button = event.submitter; button.disabled = true; button.textContent = 'Preparing authorization…';
+      try {
+        const identifier = $('#oauthIdentifier').value.trim();
+        const result = await api('oauth/start', {identifier, origin:location.origin});
+        if (!result?.url) throw new Error('OAuth server did not return an authorization URL');
+        location.assign(result.url);
+      } catch (error) { notice(error.message, true); button.disabled = false; button.textContent = 'Authorize with OAuth'; }
+    });
     document.querySelectorAll('nav button[data-view]').forEach(button => button.addEventListener('click', () => button.dataset.view === 'notifications' ? loadNotifications() : button.dataset.view === 'serve' ? loadServer() : showView(button.dataset.view)));
     $('#globalRefresh').addEventListener('click', async event => {
       const button = event.currentTarget;
@@ -503,8 +536,21 @@
     $('#postForm').addEventListener('submit', async event => {
       event.preventDefault(); const button = event.submitter; button.disabled = true; button.textContent = 'Publishing…';
       try {
-        await rpc('pds','POST','com.atproto.repo.createRecord','', {repo:account.did, collection:'app.bsky.feed.post', record:{$type:'app.bsky.feed.post', text:$('#postText').value, createdAt:new Date().toISOString()}});
-        $('#postText').value = ''; $('#postCount').textContent = '0 / 300'; showView('timeline'); await loadTimeline(); notice('Post published');
+        const files = [...$('#postImages').files];
+        if (files.length > 4) throw new Error('AT Protocol posts support at most 4 images');
+        const record = {$type:'app.bsky.feed.post', text:$('#postText').value, createdAt:new Date().toISOString()};
+        if (files.length) {
+          button.textContent = `Uploading 0 / ${files.length}…`;
+          const images = [];
+          for (const [index, file] of files.entries()) {
+            images.push({image:await uploadBlob(file), alt:file.name});
+            button.textContent = `Uploading ${index + 1} / ${files.length}…`;
+          }
+          record.embed = {$type:'app.bsky.embed.images', images};
+        }
+        button.textContent = 'Publishing…';
+        await rpc('pds','POST','com.atproto.repo.createRecord','', {repo:account.did, collection:'app.bsky.feed.post', record});
+        $('#postText').value = ''; $('#postImages').value = ''; $('#postCount').textContent = '0 / 300'; showView('timeline'); await loadTimeline(); notice('Post published');
       } catch (e) { notice(e.message, true); }
       finally { button.disabled = false; button.textContent = 'Publish'; }
     });
@@ -586,10 +632,12 @@
       themeMedia.addEventListener('change', applyTheme);
       applyTheme();
       const oauthToggle = $('#oauthPreference');
-      oauthToggle.disabled = location.protocol !== 'https:';
-      oauthToggle.checked = location.protocol === 'https:' && localStorage.getItem('atpro-prefer-oauth') === 'true';
-      $('#oauthNote').textContent = location.protocol === 'https:' ? 'preference saved; AT DPoP signing is not wired yet' : 'OAuth requires an HTTPS origin';
-      oauthToggle.addEventListener('change', () => localStorage.setItem('atpro-prefer-oauth', String(oauthToggle.checked)));
+      const oauthCapable = location.protocol === 'https:' || ['localhost','127.0.0.1'].includes(location.hostname);
+      oauthToggle.disabled = !oauthCapable;
+      oauthToggle.checked = oauthCapable && localStorage.getItem('atpro-prefer-oauth') !== 'false';
+      $('#appPasswordPanel').open = !oauthToggle.checked;
+      $('#oauthNote').textContent = oauthCapable ? 'OAuth + DPoP available' : 'OAuth requires HTTPS';
+      oauthToggle.addEventListener('change', () => { localStorage.setItem('atpro-prefer-oauth', String(oauthToggle.checked)); $('#appPasswordPanel').open = !oauthToggle.checked; });
       try { const session = await api('status'); setSession(session); if (session.connected) await loadTimeline(); }
       catch (error) { $('#statusText').textContent = 'Ship API unavailable'; $('#connectScreen').hidden = false; notice(error.message, true); }
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
