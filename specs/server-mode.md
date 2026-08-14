@@ -2,9 +2,8 @@
 
 ## Feed Generator
 
-`%atpro-server` is an AT Feed Generator implemented as a Gall agent. This is a
-useful, standards-facing server role that fits Eyre well and does not imply
-that the ship is already a Personal Data Server.
+`%atpro-server` is an AT Feed Generator implemented as a Gall agent. It is a
+small standards-facing service independent of `%atpro-pds`.
 
 Its public surface is deliberately small:
 
@@ -19,21 +18,28 @@ Administration is under `/apps/atpro/server` and requires an authenticated
 Eyre session. The server is disabled by default. Enabling requires a
 `did:web`, HTTPS endpoint, and AT feed record URI.
 
-## PDS boundary
+## Personal Data Server
 
-A network-valid PDS includes:
+`%atpro-pds` provides one account and repository with:
 
-1. repository storage using AT's Merkle Search Tree representation;
-2. commit signing with a DID-authorized secp256k1 or P-256 key;
-3. CAR export and repository sync endpoints;
-4. blob upload, retrieval, reference tracking, and quotas;
-5. account/session, handle, DID, and PLC operation lifecycles;
-6. sequenced federation events and reliable Relay crawling availability;
-7. abuse controls, backups, recovery, and account export/import.
+1. repository storage using AT's Merkle Search Tree representation and P-256
+   signed commits;
+2. CAR export, block reads, repository sync, record writes, and blob storage
+   through the ship's configured S3-compatible service;
+3. app-password sessions and an OAuth authorization server with PAR,
+   ship-authenticated consent, PKCE-S256, ES256 DPoP, and refresh rotation;
+4. protected-resource metadata and an `AtprotoPersonalDataServer` service in
+   the public `did:web` document;
+5. sequenced mutation events retained for the federation edge.
 
-Eyre serves the HTTP endpoints. The PDS implementation proceeds from an
-offline repository library and conformance fixtures to read-only sync, then
-repository writes and federation service.
+Eyre serves all HTTP endpoints. Relay crawling still requires the WebSocket
+edge described below. Blob reference cleanup and quotas, incremental sync
+ranges, native-app OAuth clients, backups, account import/export, and abuse
+controls remain operational work.
+
+Eyre has one exact `/.well-known/did.json` response per ship endpoint. Enable
+either the Feed Generator DID publisher or the PDS DID publisher for a given
+hostname, or expose the services through separate Eyre instances.
 
 ## Ames layer
 

@@ -21,6 +21,31 @@
       access-expires=@ud
       refresh-expires=@ud
   ==
++$  oauth-request
+  $:  id=@t
+      client-id=@t
+      redirect-uri=@t
+      scope=@t
+      state=(unit @t)
+      code-challenge=@t
+      dpop-jkt=@t
+      expires-at=@ud
+  ==
++$  oauth-code
+  $:  request=oauth-request
+      code=@t
+      expires-at=@ud
+  ==
++$  oauth-session
+  $:  id=@t
+      client-id=@t
+      scope=@t
+      dpop-jkt=@t
+      access-token=@t
+      refresh-token=@t
+      access-expires=@ud
+      refresh-expires=@ud
+  ==
 +$  stored-record
   $:  key=@t
       collection=@t
@@ -57,6 +82,11 @@
       auth=pds-auth
       sessions=(map @t pds-session)
       session-count=@ud
+      oauth-requests=(map @t oauth-request)
+      oauth-codes=(map @t oauth-code)
+      oauth-sessions=(map @t oauth-session)
+      dpop-jtis=(map @t @ud)
+      oauth-count=@ud
       records=(map @t stored-record)
       blobs=(map @t stored-blob)
       head=(unit cid:atpro-repo-types)

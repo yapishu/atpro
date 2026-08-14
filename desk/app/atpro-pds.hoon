@@ -1,7 +1,7 @@
 ::  Ship-native single-account AT Protocol PDS through Eyre.
 /-  atpro-pds, atpro-repo-types
 /+  atpro-oauth, atpro-repo, atpro-repository, atpro-commit, atpro-tid
-/+  atpro-s3, atpro-session, dbug, default-agent, server
+/+  atpro-provider, atpro-s3, atpro-session, dbug, default-agent, server
 |%
 +$  card  card:agent:gall
 +$  blob-request
@@ -57,6 +57,14 @@
   ?.  (starts-with 'Bearer ' u.authorization)  ~
   `(crip (slag 7 (trip u.authorization)))
 ::
+++  dpop-token
+  |=  headers=header-list:http
+  ^-  (unit @t)
+  =/  authorization=(unit @t)  (get-header:http 'authorization' headers)
+  ?~  authorization  ~
+  ?.  (starts-with 'DPoP ' u.authorization)  ~
+  `(crip (slag 5 (trip u.authorization)))
+::
 ++  find-access
   |=  [token=@t sessions=(map @t pds-session:atpro-pds) now=@ud]
   ^-  (unit [id=@t session=pds-session:atpro-pds])
@@ -82,6 +90,132 @@
       ==
     `i.entries
   $(entries t.entries)
+::
+++  find-oauth-access
+  |=  [token=@t sessions=(map @t oauth-session:atpro-pds) now=@ud]
+  ^-  (unit [id=@t session=oauth-session:atpro-pds])
+  =/  entries=(list [id=@t session=oauth-session:atpro-pds])
+    ~(tap by sessions)
+  |-
+  ?~  entries  ~
+  ?:  ?&  =(token access-token.session.i.entries)
+          (gth access-expires.session.i.entries now)
+      ==
+    `i.entries
+  $(entries t.entries)
+::
+++  find-oauth-refresh
+  |=  [token=@t sessions=(map @t oauth-session:atpro-pds) now=@ud]
+  ^-  (unit [id=@t session=oauth-session:atpro-pds])
+  =/  entries=(list [id=@t session=oauth-session:atpro-pds])
+    ~(tap by sessions)
+  |-
+  ?~  entries  ~
+  ?:  ?&  =(token refresh-token.session.i.entries)
+          (gth refresh-expires.session.i.entries now)
+      ==
+    `i.entries
+  $(entries t.entries)
+::
+++  clean-jtis
+  |=  [jtis=(map @t @ud) now=@ud]
+  ^-  (map @t @ud)
+  %-  ~(gas by *(map @t @ud))
+  %+  skim  ~(tap by jtis)
+  |=  [jti=@t expires=@ud]
+  (gth expires now)
+::
+++  clean-oauth-requests
+  |=  [requests=(map @t oauth-request:atpro-pds) now=@ud]
+  ^-  (map @t oauth-request:atpro-pds)
+  %-  ~(gas by *(map @t oauth-request:atpro-pds))
+  %+  skim  ~(tap by requests)
+  |=  [request-uri=@t request=oauth-request:atpro-pds]
+  (gth expires-at.request now)
+::
+++  clean-oauth-codes
+  |=  [codes=(map @t oauth-code:atpro-pds) now=@ud]
+  ^-  (map @t oauth-code:atpro-pds)
+  %-  ~(gas by *(map @t oauth-code:atpro-pds))
+  %+  skim  ~(tap by codes)
+  |=  [code-text=@t code=oauth-code:atpro-pds]
+  (gth expires-at.code now)
+::
+++  clean-oauth-sessions
+  |=  [sessions=(map @t oauth-session:atpro-pds) now=@ud]
+  ^-  (map @t oauth-session:atpro-pds)
+  %-  ~(gas by *(map @t oauth-session:atpro-pds))
+  %+  skim  ~(tap by sessions)
+  |=  [session-id=@t session=oauth-session:atpro-pds]
+  (gth refresh-expires.session now)
+::
+++  strip-query
+  |=  value=@t
+  ^-  @t
+  =/  chars=tape  (trip value)
+  =/  mark=(unit @ud)  (find "?" chars)
+  ?~(mark value (crip (scag u.mark chars)))
+::
+++  url-origin
+  |=  value=@t
+  ^-  (unit @t)
+  =/  chars=tape  (trip value)
+  =/  start=@ud
+    ?:  (starts-with 'https://' value)  8
+    0
+  ?:  =(start 0)  ~
+  =/  rest=tape  (slag start chars)
+  =/  slash=(unit @ud)  (find "/" rest)
+  =/  query=(unit @ud)  (find "?" rest)
+  =/  stop=@ud
+    ?~  slash
+      ?~(query (lent chars) (add start u.query))
+    ?~(query (add start u.slash) (add start (min u.slash u.query)))
+  `(crip (scag stop chars))
+::
+++  same-origin
+  |=  [client-id=@t redirect-uri=@t]
+  ^-  ?
+  =/  client=(unit @t)  (url-origin client-id)
+  =/  redirect=(unit @t)  (url-origin redirect-uri)
+  ?&  ?=(^ client)  ?=(^ redirect)
+      =(u.client u.redirect)
+  ==
+::
+++  did-web-for-origin
+  |=  origin=@t
+  ^-  (unit @t)
+  =/  parsed=(unit @t)  (url-origin origin)
+  ?.  ?&(?=(^ parsed) =(u.parsed origin))  ~
+  =/  authority=tape  (slag 8 (trip origin))
+  =/  encoded=tape  ~
+  |-
+  ?~  authority  `(rap 3 ~['did:web:' (crip encoded)])
+  ?:  =(i.authority ':')
+    $(authority t.authority, encoded (weld encoded "%3A"))
+  $(authority t.authority, encoded (snoc encoded i.authority))
+::
+++  percent-encode
+  |=  raw=@t
+  ^-  @t
+  =/  chars=tape  (trip raw)
+  =/  out=tape  ~
+  |-
+  ?~  chars  (crip out)
+  =/  c=@tD  i.chars
+  =/  unreserved=?
+    ?|  ?&((gte c 'a') (lte c 'z'))
+        ?&((gte c 'A') (lte c 'Z'))
+        ?&((gte c '0') (lte c '9'))
+        =(c '-')  =(c '.')  =(c '_')  =(c '~')
+    ==
+  ?:  unreserved
+    $(chars t.chars, out (snoc out c))
+  =/  hex=$-(@ud @tD)
+    |=  n=@ud
+    ?:  (lth n 10)  `@tD`(add '0' n)
+    `@tD`(add 'A' (sub n 10))
+  $(chars t.chars, out (weld out ~['%' (hex (div c 16)) (hex (mod c 16))]))
 ::
 ++  json-ipld
   |=  jon=json
@@ -123,6 +257,28 @@
   :~  ['content-type' 'application/json']
       ['cache-control' 'no-store']
   ==
+::
+++  oauth-json-payload
+  |=  [status=@ud jon=json]
+  ^-  simple-payload:http
+  :_  `(as-octs:mimes:html (en:json:html jon))
+  :-  status
+  :~  ['content-type' 'application/json']
+      ['cache-control' 'no-store']
+      ['access-control-allow-origin' '*']
+      ['access-control-allow-methods' '*']
+      ['access-control-allow-headers' 'Content-Type, DPoP']
+  ==
+::
+++  html-payload
+  |=  [status=@ud body=@t]
+  ^-  simple-payload:http
+  [[status ~[['content-type' 'text/html; charset=utf-8'] ['cache-control' 'no-store']]] `(as-octs:mimes:html body)]
+::
+++  oauth-error
+  |=  [status=@ud error=@t description=@t]
+  ^-  simple-payload:http
+  (oauth-json-payload status (pairs:enjs:format ~[['error' s+error] ['error_description' s+description]]))
 ::
 ++  bytes-payload
   |=  [mime=@t bytes=octs]
@@ -314,6 +470,8 @@
   |=  $:  config=pds-config:atpro-pds
           auth=pds-auth:atpro-pds
           sessions=@ud
+          oauth-sessions=@ud
+          oauth-requests=@ud
           records=@ud
           blobs=@ud
           head=(unit cid:atpro-repo-types)
@@ -330,6 +488,8 @@
       ['handle' s+handle.config]
       ['appPasswordConfigured' b+?=(^ password-hash.auth)]
       ['sessions' n+(scot %ud sessions)]
+      ['oauthSessions' n+(scot %ud oauth-sessions)]
+      ['oauthRequests' n+(scot %ud oauth-requests)]
       ['signingKey' s+(did-key:atpro-commit private-key.config)]
       ['records' n+(scot %ud records)]
       ['blobs' n+(scot %ud blobs)]
@@ -338,6 +498,69 @@
       ['sequence' n+(scot %ud sequence)]
       ['history' n+(scot %ud history)]
   ==
+::
+++  protected-resource-json
+  |=  config=pds-config:atpro-pds
+  ^-  json
+  %-  pairs:enjs:format
+  :~  ['resource' s+origin.config]
+      ['authorization_servers' a+~[s+origin.config]]
+      ['bearer_methods_supported' a+~[s+'header']]
+      ['scopes_supported' a+~[s+'atproto' s+'transition:generic']]
+      ['resource_documentation' s+'https://atproto.com']
+  ==
+::
+++  authorization-server-json
+  |=  config=pds-config:atpro-pds
+  ^-  json
+  =/  base=@t  origin.config
+  %-  pairs:enjs:format
+  :~  ['issuer' s+base]
+      ['authorization_endpoint' s+(rap 3 ~[base '/oauth/authorize'])]
+      ['token_endpoint' s+(rap 3 ~[base '/oauth/token'])]
+      ['pushed_authorization_request_endpoint' s+(rap 3 ~[base '/oauth/par'])]
+      ['response_types_supported' a+~[s+'code']]
+      ['grant_types_supported' a+~[s+'authorization_code' s+'refresh_token']]
+      ['scopes_supported' a+~[s+'atproto' s+'transition:generic']]
+      ['code_challenge_methods_supported' a+~[s+'S256']]
+      ['token_endpoint_auth_methods_supported' a+~[s+'none']]
+      ['dpop_signing_alg_values_supported' a+~[s+'ES256']]
+      ['require_pushed_authorization_requests' b+%.y]
+      ['authorization_response_iss_parameter_supported' b+%.y]
+      ['client_id_metadata_document_supported' b+%.y]
+  ==
+::
+++  pds-did-json
+  |=  config=pds-config:atpro-pds
+  ^-  json
+  =/  service=json
+    %-  pairs:enjs:format
+    :~  ['id' s+(rap 3 ~[service-did.config '#atproto_pds'])]
+        ['type' s+'AtprotoPersonalDataServer']
+        ['serviceEndpoint' s+origin.config]
+    ==
+  %-  pairs:enjs:format
+  :~  ['@context' a+~[s+'https://www.w3.org/ns/did/v1']]
+      ['id' s+service-did.config]
+      ['service' a+~[service]]
+  ==
+::
+++  consent-html
+  |=  request-uri=@t
+  ^-  @t
+  %+  rap  3
+  :~  '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authorize atpro</title><style>html{color-scheme:light dark}body{font:16px/1.5 monospace;max-width:38rem;margin:10vh auto;padding:1.5rem}main{border:1px solid;padding:2rem}h1{font-size:1.4rem}button{font:inherit;padding:.65rem 1rem;margin-right:.5rem;border:1px solid;cursor:pointer}.allow{background:#111;color:#fff}@media(prefers-color-scheme:dark){.allow{background:#eee;color:#111}}</style></head><body><main><h1>Authorize AT Protocol access?</h1><p>This application is asking to read and write your AT Protocol repository.</p><form method="post" action="/oauth/authorize"><input type="hidden" name="request_uri" value="'
+      request-uri
+      '"><button class="allow" name="action" value="approve">authorize</button><button name="action" value="deny">deny</button></form></main></body></html>'
+  ==
+::
+++  did-cache-card
+  |=  config=pds-config:atpro-pds
+  ^-  card
+  =/  entry=(unit cache-entry:eyre)
+    ?.  enabled.config  ~
+    `[%.n %payload (json-payload 200 (pds-did-json config))]
+  [%pass /eyre/did-cache %arvo %e %set-response '/.well-known/did.json' entry]
 --
 ::
 %-  agent:dbug
@@ -361,13 +584,24 @@
         [salt ~ jwt-key]
         *(map @t pds-session:atpro-pds)
         0
+        *(map @t oauth-request:atpro-pds)
+        *(map @t oauth-code:atpro-pds)
+        *(map @t oauth-session:atpro-pds)
+        *(map @t @ud)
+        0
         *(map @t stored-record:atpro-pds)
         *(map @t stored-blob:atpro-pds)
         ~  ~  ~  ~  [0 0]  ~  0  ~
     ==
   :_  this
-  :~  [%pass /eyre/xrpc %arvo %e %connect [~ /xrpc] dap.bowl]
+  :~  [%pass /eyre/well-known-auth %arvo %e %disconnect [~ ~['.well-known' 'oauth-protected-resource']]]
+      [%pass /eyre/well-known-server %arvo %e %disconnect [~ ~['.well-known' 'oauth-authorization-server']]]
+      [%pass /eyre/xrpc %arvo %e %connect [~ /xrpc] dap.bowl]
+      [%pass /eyre/oauth %arvo %e %connect [~ /oauth] dap.bowl]
+      [%pass /eyre/protected-resource %arvo %e %connect [~ ~['.well-known' 'oauth-protected-resource']] dap.bowl]
+      [%pass /eyre/authorization-server %arvo %e %connect [~ ~['.well-known' 'oauth-authorization-server']] dap.bowl]
       [%pass /eyre/admin %arvo %e %connect [~ /apps/atpro/pds] dap.bowl]
+      (did-cache-card config)
   ==
 ::
 ++  on-save  !>(state)
@@ -377,8 +611,14 @@
   ^-  (quip card _this)
   =/  loaded=state-0:atpro-pds  !<(state-0:atpro-pds old)
   :_  this(state loaded, in-flight ~, request-count 0)
-  :~  [%pass /eyre/xrpc %arvo %e %connect [~ /xrpc] dap.bowl]
+  :~  [%pass /eyre/well-known-auth %arvo %e %disconnect [~ ~['.well-known' 'oauth-protected-resource']]]
+      [%pass /eyre/well-known-server %arvo %e %disconnect [~ ~['.well-known' 'oauth-authorization-server']]]
+      [%pass /eyre/xrpc %arvo %e %connect [~ /xrpc] dap.bowl]
+      [%pass /eyre/oauth %arvo %e %connect [~ /oauth] dap.bowl]
+      [%pass /eyre/protected-resource %arvo %e %connect [~ ~['.well-known' 'oauth-protected-resource']] dap.bowl]
+      [%pass /eyre/authorization-server %arvo %e %connect [~ ~['.well-known' 'oauth-authorization-server']] dap.bowl]
       [%pass /eyre/admin %arvo %e %connect [~ /apps/atpro/pds] dap.bowl]
+      (did-cache-card config.loaded)
   ==
 ::
 ++  on-poke
@@ -411,6 +651,43 @@
     ^-  (unit json)
     ?~  body.request.req  ~
     (de:json:html q.u.body.request.req)
+  ::
+  ++  parse-form
+    |=  req=inbound-request:eyre
+    ^-  (unit (list [key=@t value=@t]))
+    ?~  body.request.req  ~
+    `(form-fields:atpro-provider q.u.body.request.req)
+  ::
+  ++  oauth-redirect
+    |=  [target=@t fields=(list [@t @t])]
+    ^-  simple-payload:http
+    =/  separator=@t  ?:(?=(~ (find "?" (trip target))) '?' '&')
+    =/  encoded=(list @t)
+      %+  turn  fields
+      |=  [key=@t value=@t]
+      (rap 3 ~[(percent-encode key) '=' (percent-encode value)])
+    =/  location=@t  (rap 3 ~[target separator (rap 3 (join '&' encoded))])
+    [[303 ~[['location' location] ['cache-control' 'no-store']]] ~]
+  ::
+  ++  make-oauth-session
+    |=  [client-id=@t scope=@t jkt=@t now=@ud entropy=@]
+    ^-  oauth-session:atpro-pds
+    =/  id=@t  (token:atpro-oauth (shas %atpro-oauth-session entropy))
+    =/  access=@t  (token:atpro-oauth (shas %atpro-oauth-access entropy))
+    =/  refresh=@t  (token:atpro-oauth (shas %atpro-oauth-refresh entropy))
+    [id client-id scope jkt access refresh (add now 7.200) (add now 7.776.000)]
+  ::
+  ++  oauth-token-json
+    |=  session=oauth-session:atpro-pds
+    ^-  json
+    %-  pairs:enjs:format
+    :~  ['access_token' s+access-token.session]
+        ['token_type' s+'DPoP']
+        ['refresh_token' s+refresh-token.session]
+        ['expires_in' n+'7200']
+        ['scope' s+scope.session]
+        ['sub' s+did.config]
+    ==
   ::
   ++  rebuild
     |=  [operation=@tas changed-key=@t]
@@ -489,7 +766,7 @@
       ?:  ?&  ?=(%'GET' method.request.req)
               ?=([%status ~] t.t.t.site)
           ==
-        (reply eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
+        (reply eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
       ?.  ?&  ?=(%'POST' method.request.req)
               ?=([%configure ~] t.t.t.site)
           ==
@@ -508,6 +785,14 @@
       ?~  service-did  (reply eyre-id (error-json 400 'InvalidRequest' 'missing serviceDid'))
       ?~  did  (reply eyre-id (error-json 400 'InvalidRequest' 'missing did'))
       ?~  handle  (reply eyre-id (error-json 400 'InvalidRequest' 'missing handle'))
+      =/  valid-public-config=?
+        =/  expected-service-did=(unit @t)  (did-web-for-origin u.origin)
+        ?&  ?=(^ expected-service-did)
+            =(u.service-did u.expected-service-did)
+            (starts-with 'did:' u.did)
+        ==
+      ?:  &(u.enabled !valid-public-config)
+        (reply eyre-id (error-json 400 'InvalidRequest' 'enabled PDS needs an HTTPS origin, did:web service DID, and account DID'))
       ?:  ?&  ?=(^ password)
               |((lth (met 3 u.password) 8) (gth (met 3 u.password) 256))
           ==
@@ -526,21 +811,213 @@
         auth(password-hash ~)
       =?  sessions  |(identity-changed ?=(^ password) clear)
         ~
+      =?  oauth-requests  identity-changed  ~
+      =?  oauth-codes  identity-changed  ~
+      =?  oauth-sessions  identity-changed  ~
+      =?  dpop-jtis  identity-changed  ~
       =?  this  &(u.enabled ?=(~ head))  (rebuild %init '')
-      (reply eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
+      :_  this
+      %+  weld
+        (give-simple-payload:app:server eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
+      ~[(did-cache-card config)]
     ?.  enabled.config
       (reply eyre-id (error-json 503 'ServiceUnavailable' 'PDS is disabled'))
+    =/  unix-now=@ud  (unix-seconds:atpro-oauth now.bowl)
+    =.  dpop-jtis  (clean-jtis dpop-jtis unix-now)
+    =.  oauth-requests  (clean-oauth-requests oauth-requests unix-now)
+    =.  oauth-codes  (clean-oauth-codes oauth-codes unix-now)
+    =.  oauth-sessions  (clean-oauth-sessions oauth-sessions unix-now)
+    ?:  =('.well-known' i.site)
+      ?:  ?=(%'OPTIONS' method.request.req)
+        (reply eyre-id (oauth-json-payload 200 ~))
+      ?.  ?=(%'GET' method.request.req)
+        (reply eyre-id (oauth-error 405 'invalid_request' 'method not allowed'))
+      ?:  =(['.well-known' 'oauth-protected-resource' ~] site)
+        (reply eyre-id (oauth-json-payload 200 (protected-resource-json config)))
+      ?:  =(['.well-known' 'oauth-authorization-server' ~] site)
+        (reply eyre-id (oauth-json-payload 200 (authorization-server-json config)))
+      (reply eyre-id (oauth-error 404 'invalid_request' 'not found'))
+    ?:  =('oauth' i.site)
+      ?~  t.site  (reply eyre-id (oauth-error 404 'invalid_request' 'not found'))
+      =/  route=@t  i.t.site
+      ?:  ?=(%'OPTIONS' method.request.req)
+        (reply eyre-id (oauth-json-payload 200 ~))
+      ?:  =('par' route)
+        ?.  ?=(%'POST' method.request.req)
+          (reply eyre-id (oauth-error 405 'invalid_request' 'PAR requires POST'))
+        ?:  (gte (lent ~(tap by oauth-requests)) 256)
+          (reply eyre-id (oauth-error 429 'temporarily_unavailable' 'too many pending authorization requests'))
+        =/  fields=(unit (list [key=@t value=@t]))  (parse-form req)
+        ?~  fields  (reply eyre-id (oauth-error 400 'invalid_request' 'missing form body'))
+        =/  response-type=(unit @t)  (field:atpro-provider 'response_type' u.fields)
+        =/  client-id=(unit @t)  (field:atpro-provider 'client_id' u.fields)
+        =/  redirect-uri=(unit @t)  (field:atpro-provider 'redirect_uri' u.fields)
+        =/  scope=(unit @t)  (field:atpro-provider 'scope' u.fields)
+        =/  state-token=(unit @t)  (field:atpro-provider 'state' u.fields)
+        =/  challenge=(unit @t)  (field:atpro-provider 'code_challenge' u.fields)
+        =/  challenge-method=(unit @t)  (field:atpro-provider 'code_challenge_method' u.fields)
+        =/  login-hint=(unit @t)  (field:atpro-provider 'login_hint' u.fields)
+        =/  login-ok=?
+          ?~  login-hint  %.y
+          ?|(=(u.login-hint did.config) =(u.login-hint handle.config))
+        ?.  ?&  ?=(^ response-type)  =('code' u.response-type)
+                ?=(^ client-id)  ?=(^ redirect-uri)  ?=(^ scope)
+                ?=(^ challenge)  ?=(^ challenge-method)
+                =('S256' u.challenge-method)
+                (lien (split-on:atpro-provider ' ' u.scope) |=(item=@t =('atproto' item)))
+                (same-origin u.client-id u.redirect-uri)
+                login-ok
+            ==
+          (reply eyre-id (oauth-error 400 'invalid_request' 'invalid client, redirect URI, scope, login hint, or PKCE request'))
+        =/  dpop=(unit @t)  (get-header:http 'dpop' header-list.request.req)
+        ?~  dpop  (reply eyre-id (oauth-error 400 'invalid_dpop_proof' 'DPoP proof required'))
+        =/  proof=(unit dpop-proof:atpro-provider)
+          (verify-dpop:atpro-provider u.dpop 'POST' (rap 3 ~[origin.config '/oauth/par']) ~ unix-now)
+        ?~  proof  (reply eyre-id (oauth-error 400 'invalid_dpop_proof' 'invalid DPoP proof'))
+        ?:  (~(has by dpop-jtis) jti.u.proof)
+          (reply eyre-id (oauth-error 400 'invalid_dpop_proof' 'DPoP proof was replayed'))
+        =.  dpop-jtis  (~(put by dpop-jtis) jti.u.proof (add unix-now 300))
+        =/  id=@t  (token:atpro-oauth (shas %atpro-oauth-request (cat 3 eny.bowl oauth-count)))
+        =/  request-uri=@t  (rap 3 ~['urn:ietf:params:oauth:request_uri:' id])
+        =/  pending=oauth-request:atpro-pds
+          [id u.client-id u.redirect-uri u.scope state-token u.challenge jkt.u.proof (add unix-now 300)]
+        =.  oauth-count  +(oauth-count)
+        =.  oauth-requests  (~(put by oauth-requests) request-uri pending)
+        =/  result=json
+          (pairs:enjs:format ~[['request_uri' s+request-uri] ['expires_in' n+'300']])
+        (reply eyre-id (oauth-json-payload 201 result))
+      ?:  =('authorize' route)
+        ?:  ?=(%'GET' method.request.req)
+          =/  client-id=(unit @t)  (arg-at 'client_id' args.rl)
+          =/  request-uri=(unit @t)  (arg-at 'request_uri' args.rl)
+          ?.  ?&(?=(^ client-id) ?=(^ request-uri))
+            (reply eyre-id (oauth-error 400 'invalid_request' 'missing client_id or request_uri'))
+          =/  pending=(unit oauth-request:atpro-pds)  (~(get by oauth-requests) u.request-uri)
+          ?.  ?&  ?=(^ pending)
+                  =(u.client-id client-id.u.pending)
+                  (gth expires-at.u.pending unix-now)
+              ==
+            (reply eyre-id (oauth-error 400 'invalid_request_uri' 'unknown or expired request_uri'))
+          ?.  authenticated.req
+            (reply eyre-id (login-redirect:gen:server request.req))
+          (reply eyre-id (html-payload 200 (consent-html u.request-uri)))
+        ?.  ?=(%'POST' method.request.req)
+          (reply eyre-id (oauth-error 405 'invalid_request' 'authorization requires GET or POST'))
+        ?.  authenticated.req
+          (reply eyre-id (login-redirect:gen:server request.req))
+        =/  fields=(unit (list [key=@t value=@t]))  (parse-form req)
+        ?~  fields  (reply eyre-id (oauth-error 400 'invalid_request' 'missing form body'))
+        =/  request-uri=(unit @t)  (field:atpro-provider 'request_uri' u.fields)
+        =/  action=(unit @t)  (field:atpro-provider 'action' u.fields)
+        ?.  ?&(?=(^ request-uri) ?=(^ action))
+          (reply eyre-id (oauth-error 400 'invalid_request' 'missing request_uri or action'))
+        =/  pending=(unit oauth-request:atpro-pds)  (~(get by oauth-requests) u.request-uri)
+        ?.  ?&  ?=(^ pending)
+                (gth expires-at.u.pending unix-now)
+            ==
+          (reply eyre-id (oauth-error 400 'invalid_request_uri' 'unknown or expired request_uri'))
+        =.  oauth-requests  (~(del by oauth-requests) u.request-uri)
+        ?:  =('deny' u.action)
+          =/  response=(list [@t @t])  ~[['error' 'access_denied'] ['iss' origin.config]]
+          =?  response  ?=(^ state.u.pending)
+            (snoc response ['state' u.state.u.pending])
+          (reply eyre-id (oauth-redirect redirect-uri.u.pending response))
+        ?.  =('approve' u.action)
+          (reply eyre-id (oauth-error 400 'invalid_request' 'invalid authorization action'))
+        =/  code=@t  (token:atpro-oauth (shas %atpro-oauth-code (cat 3 eny.bowl oauth-count)))
+        =/  authorized=oauth-code:atpro-pds  [u.pending code (add unix-now 300)]
+        =.  oauth-count  +(oauth-count)
+        =.  oauth-codes  (~(put by oauth-codes) code authorized)
+        =/  response=(list [@t @t])  ~[['code' code] ['iss' origin.config]]
+        =?  response  ?=(^ state.u.pending)
+          (snoc response ['state' u.state.u.pending])
+        (reply eyre-id (oauth-redirect redirect-uri.u.pending response))
+      ?:  =('token' route)
+        ?.  ?=(%'POST' method.request.req)
+          (reply eyre-id (oauth-error 405 'invalid_request' 'token endpoint requires POST'))
+        =/  fields=(unit (list [key=@t value=@t]))  (parse-form req)
+        ?~  fields  (reply eyre-id (oauth-error 400 'invalid_request' 'missing form body'))
+        =/  grant=(unit @t)  (field:atpro-provider 'grant_type' u.fields)
+        =/  client-id=(unit @t)  (field:atpro-provider 'client_id' u.fields)
+        ?.  ?&(?=(^ grant) ?=(^ client-id))
+          (reply eyre-id (oauth-error 400 'invalid_grant' 'missing grant_type or client_id'))
+        =/  dpop=(unit @t)  (get-header:http 'dpop' header-list.request.req)
+        ?~  dpop  (reply eyre-id (oauth-error 400 'invalid_dpop_proof' 'DPoP proof required'))
+        =/  proof=(unit dpop-proof:atpro-provider)
+          (verify-dpop:atpro-provider u.dpop 'POST' (rap 3 ~[origin.config '/oauth/token']) ~ unix-now)
+        ?~  proof  (reply eyre-id (oauth-error 400 'invalid_dpop_proof' 'invalid DPoP proof'))
+        ?:  (~(has by dpop-jtis) jti.u.proof)
+          (reply eyre-id (oauth-error 400 'invalid_dpop_proof' 'DPoP proof was replayed'))
+        =.  dpop-jtis  (~(put by dpop-jtis) jti.u.proof (add unix-now 300))
+        ?:  =('authorization_code' u.grant)
+          =/  code=(unit @t)  (field:atpro-provider 'code' u.fields)
+          =/  verifier=(unit @t)  (field:atpro-provider 'code_verifier' u.fields)
+          =/  redirect-uri=(unit @t)  (field:atpro-provider 'redirect_uri' u.fields)
+          ?.  ?&(?=(^ code) ?=(^ verifier) ?=(^ redirect-uri))
+            (reply eyre-id (oauth-error 400 'invalid_grant' 'missing code, verifier, or redirect URI'))
+          =/  authorized=(unit oauth-code:atpro-pds)  (~(get by oauth-codes) u.code)
+          ?~  authorized  (reply eyre-id (oauth-error 400 'invalid_grant' 'unknown authorization code'))
+          =.  oauth-codes  (~(del by oauth-codes) u.code)
+          =/  pending=oauth-request:atpro-pds  request.u.authorized
+          ?.  ?&  (gth expires-at.u.authorized unix-now)
+                  =(u.client-id client-id.pending)
+                  =(u.redirect-uri redirect-uri.pending)
+                  =(jkt.u.proof dpop-jkt.pending)
+                  =((pkce-challenge:atpro-oauth u.verifier) code-challenge.pending)
+              ==
+            (reply eyre-id (oauth-error 400 'invalid_grant' 'authorization code validation failed'))
+          =/  created=oauth-session:atpro-pds
+            (make-oauth-session client-id.pending scope.pending dpop-jkt.pending unix-now (cat 3 eny.bowl oauth-count))
+          =.  oauth-count  +(oauth-count)
+          =.  oauth-sessions  (~(put by oauth-sessions) id.created created)
+          (reply eyre-id (oauth-json-payload 200 (oauth-token-json created)))
+        ?:  =('refresh_token' u.grant)
+          =/  refresh-token=(unit @t)  (field:atpro-provider 'refresh_token' u.fields)
+          ?~  refresh-token  (reply eyre-id (oauth-error 400 'invalid_grant' 'missing refresh token'))
+          =/  found=(unit [id=@t session=oauth-session:atpro-pds])
+            (find-oauth-refresh u.refresh-token oauth-sessions unix-now)
+          ?~  found  (reply eyre-id (oauth-error 400 'invalid_grant' 'unknown or expired refresh token'))
+          ?.  ?&  =(u.client-id client-id.session.u.found)
+                  =(jkt.u.proof dpop-jkt.session.u.found)
+              ==
+            =.  oauth-sessions  (~(del by oauth-sessions) id.u.found)
+            (reply eyre-id (oauth-error 400 'invalid_grant' 'refresh token binding failed'))
+          =/  old=oauth-session:atpro-pds  session.u.found
+          =/  created=oauth-session:atpro-pds
+            (make-oauth-session client-id.old scope.old dpop-jkt.old unix-now (cat 3 eny.bowl oauth-count))
+          =.  oauth-count  +(oauth-count)
+          =.  oauth-sessions  (~(del by oauth-sessions) id.u.found)
+          =.  oauth-sessions  (~(put by oauth-sessions) id.created created)
+          (reply eyre-id (oauth-json-payload 200 (oauth-token-json created)))
+        (reply eyre-id (oauth-error 400 'unsupported_grant_type' 'grant type is not supported'))
+      (reply eyre-id (oauth-error 404 'invalid_request' 'not found'))
     ?.  =('xrpc' i.site)
       (reply eyre-id (error-json 404 'NotFound' 'not found'))
     ?~  t.site  (reply eyre-id (error-json 404 'XRPCNotSupported' 'missing method'))
     =/  method=@t  i.t.site
-    =/  unix-now=@ud  (unix-seconds:atpro-oauth now.bowl)
     =/  bearer=(unit @t)
       (bearer-token header-list.request.req)
     =/  access=(unit [id=@t session=pds-session:atpro-pds])
       ?~(bearer ~ (find-access u.bearer sessions unix-now))
     =/  refresh=(unit [id=@t session=pds-session:atpro-pds])
       ?~(bearer ~ (find-refresh u.bearer sessions unix-now))
+    =/  oauth-token=(unit @t)  (dpop-token header-list.request.req)
+    =/  oauth-access=(unit [id=@t session=oauth-session:atpro-pds])
+      ?~(oauth-token ~ (find-oauth-access u.oauth-token oauth-sessions unix-now))
+    =/  oauth-proof=(unit dpop-proof:atpro-provider)
+      ?~  oauth-access  ~
+      =/  dpop=(unit @t)  (get-header:http 'dpop' header-list.request.req)
+      ?~  dpop  ~
+      (verify-dpop:atpro-provider u.dpop ?:(=(%'GET' method.request.req) 'GET' 'POST') (rap 3 ~[origin.config (strip-query url.request.req)]) `access-token.session.u.oauth-access unix-now)
+    =/  oauth-authorized=?
+      ?&  ?=(^ oauth-access)  ?=(^ oauth-proof)
+          =(dpop-jkt.session.u.oauth-access jkt.u.oauth-proof)
+          !(~(has by dpop-jtis) jti.u.oauth-proof)
+      ==
+    =?  dpop-jtis  ?=(^ oauth-proof)
+      ?:  oauth-authorized
+        (~(put by dpop-jtis) jti.u.oauth-proof (add unix-now 300))
+      dpop-jtis
     ?:  =('com.atproto.server.describeServer' method)
       ?.  ?=(%'GET' method.request.req)
         (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
@@ -579,7 +1056,7 @@
     ?:  =('com.atproto.server.getSession' method)
       ?.  ?=(%'GET' method.request.req)
         (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
-      ?~  access
+      ?.  |(?=(^ access) oauth-authorized)
         (reply eyre-id (error-json 401 'AuthenticationRequired' 'valid access token required'))
       (reply eyre-id (json-payload 200 (account-json config)))
     ?:  =('com.atproto.server.refreshSession' method)
@@ -782,7 +1259,7 @@
       (reply eyre-id (json-payload 200 (pairs:enjs:format fields)))
     ?.  ?=(%'POST' method.request.req)
       (reply eyre-id (error-json 404 'XRPCNotSupported' 'method not supported'))
-    ?.  |(authenticated.req ?=(^ access))
+    ?.  |(authenticated.req ?=(^ access) oauth-authorized)
       (reply eyre-id (error-json 401 'AuthenticationRequired' 'write authentication required'))
     ?:  =('com.atproto.repo.uploadBlob' method)
       ?~  body.request.req
@@ -875,7 +1352,7 @@
   ^-  (unit (unit cage))
   ?+  path  [~ ~]
       [%x %status ~]
-    ``json+!>((config-json config auth (lent ~(tap by sessions)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history)))
+    ``json+!>((config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history)))
   ==
 ::
 ++  on-leave  on-leave:def

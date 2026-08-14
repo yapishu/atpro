@@ -39,8 +39,10 @@ Implementation status:
 The `%atpro-pds` Gall state contains service configuration, the P-256 signing
 key, repository head and revision, a record index, current blocks and CAR,
 retained signed snapshots, blob metadata, salted app-password digest, HS256
-session key, active sessions, monotonic revision state, and a sequenced
-mutation log. Its sole state type is the single-account `state-0`.
+session key, active app-password and OAuth sessions, pending authorization
+requests, one-use authorization codes, DPoP replay identifiers, monotonic
+revision state, and a sequenced mutation log. Its sole state type is the
+single-account `state-0`.
 
 Blob storage uses the ship's configured `%storage` service and its
 S3-compatible backend. Configuration discovery follows the `%boox` JSON scry
@@ -70,29 +72,38 @@ Eyre currently serves:
   cursor-based `listBlobs`;
 - commit and record compare-and-swap guards plus retained signed snapshots for
   historical block lookup and revision validation.
+- protected-resource and authorization-server metadata, a PDS service DID
+  document, PAR, ship-authenticated consent, authorization-code exchange, and
+  OAuth refresh at the standard well-known and `/oauth` routes.
 
 Repository mutations and blob uploads accept an authenticated Eyre session or
 a non-expired PDS access JWT. Refresh and deletion require the matching refresh
 JWT. Tokens are HS256 AT JWTs with `sub`, `aud`, `scope`, `jti`, `iat`, and
 `exp` claims. Access tokens last two hours and refresh tokens last ninety days.
 Rotating or deleting a session immediately invalidates its former access token.
-Changing the app password, account DID, handle, or service DID revokes all
-sessions.
+Changing the app password revokes all app-password sessions. Changing the
+account DID, handle, or service DID also revokes OAuth sessions and pending
+grants.
 
-The HTTP/authentication checkpoint extends this surface with:
+OAuth authorization codes expire after five minutes, are consumed once, and
+require the original redirect URI, client ID, P-256 key thumbprint, and
+PKCE-S256 verifier at exchange. Access tokens last two hours; refresh tokens
+last ninety days and rotate with the access token. Each protected request
+validates the ES256 DPoP signature, `htm`, `htu`, `iat`, an optional `exp`,
+`ath`, key thumbprint, and a previously unused `jti`. The accepted client
+profile is a URL-valued public HTTPS client ID with a same-origin HTTPS
+redirect URI.
+Expired requests, codes, sessions, and replay identifiers are removed during
+request handling, and pending authorization requests are capped at 256.
 
-- OAuth authorization-server discovery, PAR, authorization, and token
-  endpoints;
+The remaining HTTP/storage work includes:
+
 - blob-reference verification, untethered-blob expiry, quota enforcement, and
   object deletion;
 - incremental CAR ranges after a retained `since` revision;
 - repository description, preferences, and service configuration endpoints;
-- DID documents and protected-resource metadata for the configured HTTPS
-  origin.
-
-The provider uses the same PKCE, PAR, DPoP, and nonce rules as the working
-client implementation, with the ship acting as authorization server and
-protected resource. Operators can also enable app-password sessions.
+- remote OAuth client-metadata validation and native application redirect
+  profiles.
 
 ## Federation edge
 
@@ -109,8 +120,7 @@ That client role and PDS federation role use separate credentials and queues.
 ## Delivery order
 
 1. add blob reference tracking, untethered cleanup, and CAR/sync range reads;
-2. add OAuth provider endpoints;
-3. add DID document/service publication and public HTTPS interoperability tests;
-4. add the WebSocket federation edge and Relay interoperability tests;
-5. add backups, account import/export, quotas, abuse controls, and operational
+2. add remote OAuth client metadata and native-app redirect profiles;
+3. add the WebSocket federation edge and Relay interoperability tests;
+4. add backups, account import/export, quotas, abuse controls, and operational
    health surfaces.

@@ -218,6 +218,23 @@
           <div class="form-body"><button id="loadMorePeople" class="ghost" type="button" hidden>load more</button></div>
         </section>
         <section id="serve" class="view">
+          <div class="section-head"><h2>personal data server</h2></div>
+          <div id="pdsStatus" class="server-status">PDS state not loaded</div>
+          <form id="pdsForm" class="form-body">
+            <label for="pdsOrigin">public HTTPS origin</label>
+            <input id="pdsOrigin" type="url" placeholder="https://pds.example.com" required>
+            <label for="pdsServiceDid">service DID</label>
+            <input id="pdsServiceDid" placeholder="did:web:pds.example.com" required>
+            <label for="pdsAccountDid">account DID</label>
+            <input id="pdsAccountDid" placeholder="did:plc:..." required>
+            <label for="pdsHandle">account handle</label>
+            <input id="pdsHandle" placeholder="name.example.com" required>
+            <label for="pdsPassword">app password</label>
+            <input id="pdsPassword" type="password" autocomplete="new-password" placeholder="leave blank to preserve it">
+            <label><input id="pdsClearPassword" type="checkbox" style="width:auto"> remove the current app password</label>
+            <label><input id="pdsEnabled" type="checkbox" style="width:auto"> serve repository and authorization endpoints</label>
+            <div class="form-row"><button class="primary">save PDS config</button></div>
+          </form>
           <div class="section-head"><h2>feed generator</h2></div>
           <div id="serverStatus" class="server-status">server state not loaded</div>
           <form id="serverForm" class="form-body">
@@ -276,6 +293,7 @@
     let currentProfile = null;
     let currentThread = null;
     let currentGraph = null;
+    let pdsState = null;
     let serverState = null;
     let relayState = null;
 
@@ -298,6 +316,13 @@
     }
     async function serverApi(path, body) {
       const response = await fetch(`/apps/atpro/server/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:body === undefined ? {} : {'content-type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
+      const text = await response.text(); let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = {error:text || `HTTP ${response.status}`}; }
+      if (!response.ok) throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
+      return data;
+    }
+    async function pdsApi(path, body) {
+      const response = await fetch(`/apps/atpro/pds/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:body === undefined ? {} : {'content-type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
       const text = await response.text(); let data;
       try { data = text ? JSON.parse(text) : null; } catch { data = {error:text || `HTTP ${response.status}`}; }
       if (!response.ok) throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
@@ -490,6 +515,19 @@
       $('#serverStatus').textContent = state.enabled ? `live: ${state.endpoint}` : 'disabled — configuration is private until enabled';
       $('#serverPosts').innerHTML = state.posts?.length ? state.posts.map(post => `<div class="server-post"><code>${escapeHtml(post)}</code><button class="danger" data-remove-post="${escapeHtml(post)}">remove</button></div>`).join('') : '<div class="empty">No posts.</div>';
     }
+    function renderPds(state) {
+      pdsState = state;
+      $('#pdsOrigin').value = state.origin || '';
+      $('#pdsServiceDid').value = state.serviceDid || '';
+      $('#pdsAccountDid').value = state.did || '';
+      $('#pdsHandle').value = state.handle || '';
+      $('#pdsPassword').value = '';
+      $('#pdsClearPassword').checked = false;
+      $('#pdsEnabled').checked = !!state.enabled;
+      $('#pdsStatus').textContent = state.enabled
+        ? `live · ${state.records || 0} records · ${state.blobs || 0} blobs · ${state.oauthSessions || 0} OAuth sessions · ${state.appPasswordConfigured ? 'app password set' : 'OAuth only'}`
+        : `disabled · ${state.records || 0} records retained`;
+    }
     function renderRelay(state) {
       relayState = state;
       $('#relayEnabled').checked = !!state.enabled;
@@ -501,7 +539,8 @@
     }
     async function loadServer() {
       showView('serve');
-      const [feed, relay] = await Promise.allSettled([serverApi('status'), relayApi('status')]);
+      const [pds, feed, relay] = await Promise.allSettled([pdsApi('status'), serverApi('status'), relayApi('status')]);
+      if (pds.status === 'fulfilled') renderPds(pds.value); else $('#pdsStatus').textContent = pds.reason.message;
       if (feed.status === 'fulfilled') renderServer(feed.value); else $('#serverStatus').textContent = feed.reason.message;
       if (relay.status === 'fulfilled') renderRelay(relay.value); else $('#relayStatus').textContent = relay.reason.message;
     }
@@ -618,6 +657,14 @@
     $('#serverForm').addEventListener('submit', async event => {
       event.preventDefault(); const button = event.submitter; button.disabled = true;
       try { renderServer(await serverApi('configure',{enabled:$('#serverEnabled').checked,did:$('#serverDid').value.trim(),endpoint:$('#serverEndpoint').value.trim().replace(/\/$/,''),feedUri:$('#serverFeedUri').value.trim()})); notice('Server configuration saved'); }
+      catch (error) { notice(error.message, true); }
+      finally { button.disabled = false; }
+    });
+    $('#pdsForm').addEventListener('submit', async event => {
+      event.preventDefault(); const button = event.submitter; button.disabled = true;
+      const body = {enabled:$('#pdsEnabled').checked, origin:$('#pdsOrigin').value.trim().replace(/\/$/,''), serviceDid:$('#pdsServiceDid').value.trim(), did:$('#pdsAccountDid').value.trim(), handle:$('#pdsHandle').value.trim(), clearAppPassword:$('#pdsClearPassword').checked};
+      if ($('#pdsPassword').value) body.appPassword = $('#pdsPassword').value;
+      try { renderPds(await pdsApi('configure', body)); notice('PDS configuration saved'); }
       catch (error) { notice(error.message, true); }
       finally { button.disabled = false; }
     });

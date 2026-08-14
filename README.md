@@ -24,6 +24,8 @@ The desk supports:
 - an optional token-protected event webhook and Ames/Gall relay.
 - deterministic AT repository blocks, signed commits, CAR exports, and a
   single-account PDS served through Eyre.
+- an AT OAuth authorization server with PAR, consent, PKCE, ES256 DPoP,
+  rotating refresh tokens, and replay rejection.
 
 ## Architecture
 
@@ -102,7 +104,25 @@ session.
 PDS administration accepts a `serviceDid` and optional `appPassword` alongside
 the origin, account DID, and handle. The password is stored only as a salted
 HMAC-SHA256 digest. The PDS issues standard HS256 AT access and refresh JWTs;
-changing the password or hosted identity revokes every active session.
+changing the password revokes every app-password session, while changing the
+hosted identity revokes app-password and OAuth sessions.
+
+The same service is an OAuth authorization server and protected resource. It
+publishes `/.well-known/oauth-protected-resource`,
+`/.well-known/oauth-authorization-server`, and `/.well-known/did.json`; accepts
+pushed authorization requests at `/oauth/par`; presents ship-authenticated
+consent at `/oauth/authorize`; and exchanges or refreshes grants at
+`/oauth/token`. Authorization codes are one-use and PKCE-S256-bound. OAuth
+access tokens are bound to the client's P-256 key, and protected XRPC requests
+must include an ES256 DPoP proof with the correct method, URL, access-token
+hash, time window, and unused `jti`. Access and refresh lifetimes are two hours
+and ninety days, and refresh rotates the whole OAuth session.
+
+The provider accepts public web clients whose HTTPS redirect URI has the same
+origin as the URL-valued client ID. This secure web-client profile covers
+hosted browser clients without turning the authorization endpoint into an open
+redirect. Remote client-metadata retrieval and native-app redirect schemes are
+not part of the accepted client profile.
 
 Blob bytes live in the S3-compatible endpoint selected in the ship's
 `%storage` settings. `%atpro-pds` reads that endpoint, bucket, region, and
@@ -112,9 +132,10 @@ metadata. Both HTTP and HTTPS self-hosted endpoints are supported. The active
 Storage service must expose credentials; browser-only presigned-URL mode does
 not provide Gall with the secret needed for server-side blob reads and writes.
 
-The remaining public-service work covers OAuth provider behavior, blob
-reference validation and garbage collection, incremental sync ranges, DID
-publication, and the WebSocket federation edge.
+The remaining public-service work covers blob reference validation and garbage
+collection, incremental sync ranges, remote client-metadata validation,
+native-app OAuth redirects, account lifecycle operations, and the WebSocket
+federation edge.
 
 ## Event relay mode
 
@@ -178,3 +199,10 @@ OAuth callback and client metadata routes are public by protocol design.
 
 The RPC body is `{target, method, nsid, query?, body?}`. `target` is `public`
 or `pds`, and `method` is `GET` or `POST`.
+
+PDS administration is at `GET /apps/atpro/pds/status` and
+`POST /apps/atpro/pds/configure`. Public PDS discovery and authorization use
+`/.well-known/oauth-protected-resource`,
+`/.well-known/oauth-authorization-server`, `/.well-known/did.json`,
+`/oauth/par`, `/oauth/authorize`, and `/oauth/token`. XRPC remains under
+`/xrpc/<nsid>`.
