@@ -71,7 +71,7 @@ only the service, DID, handle, and authentication mode.
 - `GET /.well-known/did.json` through Eyre's exact-response cache
 - authenticated administration at `/apps/atpro/server`
 
-Configure it in the `%serve` screen with a public HTTPS endpoint, matching
+Configure it in the `PDS + services` screen with a public HTTPS endpoint, matching
 `did:web`, and an `app.bsky.feed.generator` record URI in your connected
 repository. The UI can publish that record and curate post URIs. Server mode
 remains disabled until explicitly configured.
@@ -106,6 +106,10 @@ method-bound ES256 `getServiceAuth` JWTs for DID audiences. Access tokens expire
 after ninety days, refresh rotates both tokens, and deletion revokes the whole
 session.
 
+The browser exposes this administration as `PDS + services` in the sidebar and
+as `open ship PDS control` on the disconnected screen. Configuring the local
+PDS does not require connecting an external AT account.
+
 PDS administration accepts a `serviceDid` and optional `appPassword` alongside
 the origin, account DID, and handle. The password is stored only as a salted
 HMAC-SHA256 digest. The PDS issues standard HS256 AT access and refresh JWTs;
@@ -137,14 +141,15 @@ record-reference metadata. Standard blob references become DAG-CBOR links only
 after their CID, MIME type, and size match a stored object. A single upload is
 limited to 50 MiB and the account blob quota is 1 GiB. Newly uploaded objects
 have a 24-hour untethered grace period; objects whose final record reference is
-removed are immediately eligible for cleanup. The authenticated `clean blobs`
-control schedules up to 50 eligible deletions per run and keeps failed objects
-available for retry. Both HTTP and HTTPS self-hosted endpoints are supported. The active
+removed are immediately eligible for cleanup. Gall runs the same bounded
+cleanup every hour, and the authenticated `clean blobs` control runs it on
+demand. Each pass schedules up to 50 eligible deletions and keeps failed
+objects available for retry. Both HTTP and HTTPS self-hosted endpoints are supported. The active
 Storage service must expose credentials; browser-only presigned-URL mode does
 not provide Gall with the secret needed for server-side blob reads and writes.
 
-The remaining public-service work covers automatic cleanup scheduling, remote
-client-metadata validation, native-app OAuth redirects, account lifecycle and
+The remaining public-service work covers remote client-metadata validation,
+native-app OAuth redirects, account lifecycle and
 import/export operations, backups, abuse controls, and the WebSocket federation
 edge.
 
@@ -152,7 +157,7 @@ edge.
 
 `%atpro-relay` accepts normalized events at `POST /apps/atpro/hook` when the
 hook is explicitly enabled and the request has its configured Bearer token.
-Configure it in the `%serve` screen. Events are deduplicated by source/cursor,
+Configure it in the `PDS + services` screen. Events are deduplicated by source/cursor,
 kept in a bounded queue, and published as `%atpro-event` facts on `/events`.
 An allowlist controls downstream Ames subscribers; an optional upstream ship
 turns an instance into a follower of another `%atpro-relay` gateway.

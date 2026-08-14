@@ -36,10 +36,11 @@ Eyre session. The server is disabled by default. Enabling requires a
 
 Eyre serves all HTTP endpoints. Blob storage enforces 50 MiB per object and
 1 GiB per account, tracks record references, gives untethered uploads a 24-hour
-grace period, and deletes eligible objects in authenticated cleanup batches.
+grace period, and deletes eligible objects in hourly and authenticated cleanup
+batches.
 Relay crawling still requires the WebSocket edge described below. Native-app
-OAuth clients, automatic cleanup scheduling, backups, account import/export,
-and abuse controls remain operational work.
+OAuth clients, backups, account import/export, and abuse controls remain
+operational work.
 
 Eyre has one exact `/.well-known/did.json` response per ship endpoint. Enable
 either the Feed Generator DID publisher or the PDS DID publisher for a given

@@ -847,6 +847,7 @@
       [%pass /eyre/protected-resource %arvo %e %connect [~ ~['.well-known' 'oauth-protected-resource']] dap.bowl]
       [%pass /eyre/authorization-server %arvo %e %connect [~ ~['.well-known' 'oauth-authorization-server']] dap.bowl]
       [%pass /eyre/admin %arvo %e %connect [~ /apps/atpro/pds] dap.bowl]
+      [%pass /cleanup %arvo %b %wait (add now.bowl ~h1)]
       (did-cache-card config)
   ==
 ::
@@ -867,6 +868,7 @@
       [%pass /eyre/protected-resource %arvo %e %connect [~ ~['.well-known' 'oauth-protected-resource']] dap.bowl]
       [%pass /eyre/authorization-server %arvo %e %connect [~ ~['.well-known' 'oauth-authorization-server']] dap.bowl]
       [%pass /eyre/admin %arvo %e %connect [~ /apps/atpro/pds] dap.bowl]
+      [%pass /cleanup %arvo %b %wait (add now.bowl ~h1)]
       (did-cache-card config.loaded)
   ==
 ::
@@ -1784,12 +1786,17 @@
 ++  on-arvo
   |=  [=wire sign=sign-arvo]
   ^-  (quip card _this)
+  |^
   ?+  wire  (on-arvo:def wire sign)
       [%eyre *]
     ?:  ?=(%bound +<.sign)
       ~?  !accepted.sign  [dap.bowl %binding-rejected binding.sign]
       [~ this]
     [~ this]
+  ::
+      [%cleanup ~]
+    ?.  ?=([%behn %wake *] sign)  `this
+    automatic-cleanup
   ::
       [%iris @ ~]
     =/  request-id=(unit @uv)  (slaw %uv i.t.wire)
@@ -1842,6 +1849,49 @@
       (give-simple-payload:app:server eyre-id (bytes-payload mime.blob.u.context data))
     ==
   ==
+  ::
+  ++  automatic-cleanup
+    ^-  (quip card _this)
+    =/  timer=card  [%pass /cleanup %arvo %b %wait (add now.bowl ~h1)]
+    ?.  enabled.config  [~[timer] this]
+    =/  unix-now=@ud  (unix-seconds:atpro-oauth now.bowl)
+    =/  eligible=(list stored-blob:atpro-pds)
+      %+  turn
+        %+  skim  ~(tap by blobs)
+        |=  [cid-text=@t blob=stored-blob:atpro-pds]
+        (cleanup-eligible blob unix-now)
+      |=  [cid-text=@t blob=stored-blob:atpro-pds]
+      blob
+    =/  batch=(list stored-blob:atpro-pds)  (scag 50 eligible)
+    ?~  batch  [~[timer] this]
+    =/  settings=(unit [credentials=credentials:atpro-s3 configuration=configuration:atpro-s3])
+      (storage-settings our.bowl now.bowl)
+    ?~  settings  [~[timer] this]
+    =/  queued=[cards=(list card) next=_this]  (queue-auto-deletes batch u.settings)
+    [(snoc cards.queued timer) next.queued]
+  ::
+  ++  queue-auto-deletes
+    |=  $:  candidates=(list stored-blob:atpro-pds)
+            settings=[credentials=credentials:atpro-s3 configuration=configuration:atpro-s3]
+        ==
+    ^-  [(list card) _this]
+    =/  cards=(list card)  ~
+    |-
+    ?~  candidates  [(flop cards) this]
+    =/  blob=stored-blob:atpro-pds  i.candidates
+    =/  text=@t  (cid-text:atpro-repo cid.blob)
+    =/  signed=signed-request:atpro-s3
+      (sign:atpro-s3 'DELETE' 'application/octet-stream' [0 0] credentials.settings configuration.settings object-key.blob now.bowl)
+    =/  request-id=@uv
+      `@uv`(shas %atpro-pds-request (cat 3 eny.bowl request-count))
+    =.  request-count  +(request-count)
+    =.  in-flight  (~(put by in-flight) request-id [%delete blob])
+    =.  blobs  (~(del by blobs) text)
+    =.  pending-blob-deletes  (~(put by pending-blob-deletes) text blob)
+    =.  cards
+      [[%pass /iris/(scot %uv request-id) %arvo %i %request [%'DELETE' url.signed headers.signed ~] *outbound-config:iris] cards]
+    $(candidates t.candidates)
+  --
 ::
 ++  on-fail  on-fail:def
 --

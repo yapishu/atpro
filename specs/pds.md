@@ -113,6 +113,9 @@ are encoded as DAG-CBOR links to the stored raw CID. Untethered uploads receive 
 its last reference disappears. Cleanup moves objects to durable pending state,
 signs DELETE requests against the exact configured Storage endpoint, removes
 successful objects, and restores failed objects for retry.
+Gall schedules a cleanup pass every hour and deletes at most 50 eligible
+objects per pass. The authenticated administration endpoint invokes the same
+bounded pass on demand.
 
 `com.atproto.sync.getRepo?since=` compares the retained base snapshot with the
 current snapshot and returns a current-rooted CAR containing only new blocks.
@@ -121,7 +124,7 @@ revision. Unknown retained revisions are rejected.
 
 The remaining HTTP/storage work includes:
 
-- automatic periodic blob cleanup and configurable quota policy;
+- configurable quota policy;
 - service configuration and broader account lifecycle endpoints;
 - remote OAuth client-metadata validation and native application redirect
   profiles.
@@ -141,7 +144,7 @@ That client role and PDS federation role use separate credentials and queues.
 ## Delivery order
 
 1. add remote OAuth client metadata and native-app redirect profiles;
-2. add account import/export and automatic cleanup;
+2. add account import/export;
 3. add the WebSocket federation edge and Relay interoperability tests;
 4. add backups, configurable quotas, abuse controls, and operational
    health surfaces.

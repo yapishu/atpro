@@ -112,6 +112,7 @@
     .profile-stats button { font-size:11px }
     .profile-actions { margin-top:10px }
     .subhead { padding:8px 16px; color:var(--quiet); border-bottom:1px solid var(--line); font-size:11px }
+    .reply-context { margin:0 0 4px; color:var(--signal); font-size:10px }
     .server-status { padding:11px 16px; color:var(--quiet); border-bottom:1px dotted var(--line); font-size:11px }
     .server-post { display:flex; gap:8px; align-items:center; padding:8px 16px; border-bottom:1px dotted var(--line) }
     .server-post code { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis }
@@ -137,7 +138,7 @@
     </header>
 
     <section id="connectScreen" class="panel connect" hidden>
-      <div class="eyebrow">Connect a PDS</div>
+      <div class="eyebrow">Connect an AT account</div>
       <h2>A bridge between worlds.</h2>
       <p>Authorize %atpro with your handle. OAuth keys and session tokens remain inside your Urbit agent.</p>
       <form id="oauthForm">
@@ -158,16 +159,21 @@
         </form>
         <div class="hint">Create an app password in Bluesky → Settings → Privacy and security → App passwords. Your main password is not recommended.</div>
       </details>
+      <div class="alternate-auth">
+        <button id="openPdsLoggedOut" class="ghost" type="button">open ship PDS control</button>
+        <div class="hint">Configure this ship as a PDS without connecting an external AT account.</div>
+      </div>
     </section>
 
     <section id="client" class="layout" hidden>
       <nav aria-label="Primary">
-        <button class="active" data-view="timeline">timeline</button>
-        <button data-view="notifications">notices</button>
-        <button data-view="search">find</button>
-        <button data-view="compose">write</button>
-        <button data-view="serve">serve</button>
-        <details class="settings">
+        <button class="active account-only" data-view="timeline">timeline</button>
+        <button class="account-only" data-view="notifications">notices</button>
+        <button class="account-only" data-view="search">find</button>
+        <button class="account-only" data-view="compose">write</button>
+        <button data-view="serve">PDS + services</button>
+        <button id="returnConnect" type="button" hidden>connect AT account</button>
+        <details class="settings account-only">
           <summary>settings</summary>
           <div class="settings-body">
             <strong id="accountHandle"></strong>
@@ -175,8 +181,9 @@
             <button id="refreshSession" class="ghost" type="button">refresh session</button>
             <div id="identityStatus" class="meta">AT identity is not published</div>
             <button id="publishIdentity" class="ghost" type="button">publish AT identity</button>
-            <button id="clearIdentity" class="ghost" type="button">unpublish AT identity</button>
+            <button id="clearIdentity" class="ghost" type="button" hidden>unpublish AT identity</button>
             <button id="scanFriends" class="ghost" type="button">scan contacts</button>
+            <button id="openPds" class="ghost" type="button">PDS control</button>
             <button id="logout" class="danger" type="button">disconnect</button>
             <label class="setting-option"><input id="darkMode" type="checkbox">dark appearance</label>
             <button id="systemTheme" class="ghost" type="button">follow system appearance</button>
@@ -218,7 +225,8 @@
           <div class="form-body"><button id="loadMorePeople" class="ghost" type="button" hidden>load more</button></div>
         </section>
         <section id="serve" class="view">
-          <div class="section-head"><h2>personal data server</h2></div>
+          <div class="section-head"><h2>PDS control</h2></div>
+          <div class="server-status">Configure and operate the AT repository hosted by this ship. Its origin must be publicly reachable over HTTPS.</div>
           <div id="pdsStatus" class="server-status">PDS state not loaded</div>
           <form id="pdsForm" class="form-body">
             <label for="pdsOrigin">public HTTPS origin</label>
@@ -364,6 +372,8 @@
       account = session?.connected ? session : null;
       $('#connectScreen').hidden = !!account;
       $('#client').hidden = !account;
+      document.querySelectorAll('.account-only').forEach(element => element.hidden = !account);
+      $('#returnConnect').hidden = !!account;
       $('#statusDot').classList.toggle('on', !!account);
       $('#statusText').textContent = account ? `@${account.handle}` : 'Not connected';
       if (account) {
@@ -372,9 +382,18 @@
         $('#oauthNote').textContent = account.auth === 'oauth' ? 'connected with OAuth + DPoP' : 'connected with an app password';
       }
     }
+    function openPdsControl() {
+      $('#connectScreen').hidden = true;
+      $('#client').hidden = false;
+      document.querySelectorAll('.account-only').forEach(element => element.hidden = true);
+      $('#returnConnect').hidden = false;
+      loadServer();
+    }
     function setIdentity(identity) {
-      $('#identityStatus').textContent = identity?.published ? `public: @${identity.handle}` : 'AT identity is not published';
-      $('#clearIdentity').hidden = !identity?.published;
+      const published = !!identity?.published;
+      $('#identityStatus').textContent = published ? `public: @${identity.handle}` : 'AT identity is not published';
+      $('#publishIdentity').hidden = published;
+      $('#clearIdentity').hidden = !published;
     }
     function timeAgo(date) {
       const seconds = Math.max(1, (Date.now() - new Date(date).getTime()) / 1000);
@@ -417,7 +436,7 @@
     function personHtml(actor) {
       return `<article class="person" data-actor="${escapeHtml(actor.did || actor.handle || '')}">${actor.avatar ? `<img class="avatar" src="${escapeHtml(actor.avatar)}" alt="">` : '<div class="avatar"></div>'}<div><div class="name">${escapeHtml(actor.displayName || actor.handle || 'Unknown')}</div><div class="handle">@${escapeHtml(actor.handle || '')}</div><div class="bio">${escapeHtml(actor.description || '')}</div></div></article>`;
     }
-    function postHtml(item, depth = 0, inThread = false) {
+    function postHtml(item, depth = 0, inThread = false, context = '') {
       const post = item.post || item;
       const author = post.author || {};
       const record = post.record || {};
@@ -426,7 +445,8 @@
       const repostRecord = escapeHtml(post.viewer?.repost || '');
       const avatarImage = author.avatar ? `<img class="avatar" src="${escapeHtml(author.avatar)}" alt="">` : '<span class="avatar"></span>';
       const avatar = `<button class="avatar-button" data-actor="${actor}" aria-label="Open @${escapeHtml(author.handle || '')}">${avatarImage}</button>`;
-      return `<article class="post${inThread ? ' thread-post' : ''}" style="--depth:${Math.min(depth,4)}" data-uri="${escapeHtml(post.uri || '')}">${avatar}<div><div class="who"><button class="author-link name" data-actor="${actor}">${escapeHtml(author.displayName || author.handle || 'Unknown')}</button><span class="handle">@${escapeHtml(author.handle || '')}</span><span class="time">· ${escapeHtml(timeAgo(record.createdAt))}</span></div><div class="body">${escapeHtml(record.text || '')}</div>${embedHtml(post.embed)}<div class="post-stats"><button class="stat-link${likeRecord ? ' on' : ''}" data-action="like" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${likeRecord}">♡ ${post.likeCount || 0}</button><button class="stat-link${repostRecord ? ' on' : ''}" data-action="repost" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${repostRecord}">↻ ${post.repostCount || 0}</button><button class="stat-link" data-uri="${escapeHtml(post.uri || '')}">◌ ${post.replyCount || 0} replies</button></div></div></article>`;
+      const contextHtml = context ? `<div class="reply-context">${escapeHtml(context)}</div>` : '';
+      return `<article class="post${inThread ? ' thread-post' : ''}" style="--depth:${Math.min(depth,4)}" data-uri="${escapeHtml(post.uri || '')}">${avatar}<div>${contextHtml}<div class="who"><button class="author-link name" data-actor="${actor}">${escapeHtml(author.displayName || author.handle || 'Unknown')}</button><span class="handle">@${escapeHtml(author.handle || '')}</span><span class="time">· ${escapeHtml(timeAgo(record.createdAt))}</span></div><div class="body">${escapeHtml(record.text || '')}</div>${embedHtml(post.embed)}<div class="post-stats"><button class="stat-link${likeRecord ? ' on' : ''}" data-action="like" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${likeRecord}">♡ ${post.likeCount || 0}</button><button class="stat-link${repostRecord ? ' on' : ''}" data-action="repost" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${repostRecord}">↻ ${post.repostCount || 0}</button><button class="stat-link" data-uri="${escapeHtml(post.uri || '')}">◌ ${post.replyCount || 0} replies</button></div></div></article>`;
     }
     async function loadTimeline() {
       $('#feed').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -449,7 +469,15 @@
         const following = escapeHtml(profile.viewer?.following || '');
         const own = profile.did === account.did;
         const follow = own ? '' : `<div class="profile-actions"><button class="ghost${following ? ' on' : ''}" data-action="follow" data-actor="${escapeHtml(profile.did)}" data-record="${following}">${following ? 'unfollow' : 'follow'}</button></div>`;
-        $('#profileBody').innerHTML = `<section class="profile-head">${avatar}<div><div class="name">${escapeHtml(profile.displayName || profile.handle)}</div><div class="handle">@${escapeHtml(profile.handle || '')}</div><div class="profile-stats"><button class="stat-link" data-graph="followers" data-graph-actor="${escapeHtml(profile.did || profile.handle)}">${profile.followersCount || 0} followers</button><button class="stat-link" data-graph="following" data-graph-actor="${escapeHtml(profile.did || profile.handle)}">${profile.followsCount || 0} following</button><span>${profile.postsCount || 0} posts</span></div><div class="bio">${escapeHtml(profile.description || '')}</div>${follow}</div></section><div class="subhead">recent posts</div>${feed.feed?.length ? feed.feed.map(item => postHtml(item)).join('') : '<div class="empty">No posts found.</div>'}`;
+        const items = feed.feed || [];
+        const posts = items.filter(item => !item.post?.record?.reply);
+        const replies = items.filter(item => item.post?.record?.reply);
+        const postList = posts.length ? posts.map(item => postHtml(item)).join('') : '<div class="empty">No top-level posts found.</div>';
+        const replyList = replies.length ? replies.map(item => {
+          const handle = item.reply?.parent?.author?.handle;
+          return postHtml(item, 0, false, handle ? `reply to @${handle}` : 'reply');
+        }).join('') : '<div class="empty">No replies found.</div>';
+        $('#profileBody').innerHTML = `<section class="profile-head">${avatar}<div><div class="name">${escapeHtml(profile.displayName || profile.handle)}</div><div class="handle">@${escapeHtml(profile.handle || '')}</div><div class="profile-stats"><button class="stat-link" data-graph="followers" data-graph-actor="${escapeHtml(profile.did || profile.handle)}">${profile.followersCount || 0} followers</button><button class="stat-link" data-graph="following" data-graph-actor="${escapeHtml(profile.did || profile.handle)}">${profile.followsCount || 0} following</button><span>${profile.postsCount || 0} posts</span></div><div class="bio">${escapeHtml(profile.description || '')}</div>${follow}</div></section><div class="subhead">posts</div>${postList}<div class="subhead">replies</div>${replyList}`;
       } catch (error) { $('#profileBody').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; notice(error.message, true); }
     }
     async function loadGraph(actor, kind, cursor = '', append = false) {
@@ -627,6 +655,9 @@
       } catch (e) { notice(e.message, true); }
       finally { button.disabled = false; button.textContent = 'scan contacts'; }
     });
+    $('#openPds').addEventListener('click', () => { document.querySelector('.settings').open = false; loadServer(); });
+    $('#openPdsLoggedOut').addEventListener('click', openPdsControl);
+    $('#returnConnect').addEventListener('click', () => { $('#client').hidden = true; $('#connectScreen').hidden = false; });
     $('#logout').addEventListener('click', async () => { try { setSession(await api('logout', {})); } catch (e) { notice(e.message, true); } });
     $('#postText').addEventListener('input', event => $('#postCount').textContent = `${event.target.value.length} / 300`);
     $('#replyText').addEventListener('input', event => $('#replyCount').textContent = `${event.target.value.length} / 300`);

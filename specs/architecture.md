@@ -101,7 +101,7 @@ cross the Gall/browser boundary.
 1. Add typed client actions for ship-native XRPC callers, sharing the same
    destination and NSID policy as HTTP.
 2. Add remote OAuth client-metadata retrieval and native-app redirect profiles.
-3. Add account import/export, backups, and automatic blob cleanup.
+3. Add account import/export and backups.
 4. Pair the Eyre sync HTTP surface with a small WebSocket edge for
    `com.atproto.sync.subscribeRepos` federation.
 
