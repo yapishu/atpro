@@ -1,0 +1,10 @@
+{
+  "name": "AT Protocol for Urbit",
+  "short_name": "AT Protocol",
+  "start_url": "/apps/atpro/",
+  "scope": "/apps/atpro/",
+  "display": "standalone",
+  "background_color": "#07101a",
+  "theme_color": "#08111c",
+  "icons": [{"src":"/apps/atpro/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
