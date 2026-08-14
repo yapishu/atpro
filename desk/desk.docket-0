@@ -1,9 +1,9 @@
-:~  title+'AT Protocol'
+:~  title+'%atpro'
     info+'A native AT Protocol client for Urbit'
     color+0x11.1827
     version+[0 1 0]
     image+''
-    website+'https://atproto.com'
+    website+'https://github.com/yapishu/atpro'
     license+'MIT'
     site+/apps/atpro
 ==

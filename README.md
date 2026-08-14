@@ -90,10 +90,22 @@ Authenticated administration is available at `/apps/atpro/pds`. Enabling the
 service sets its HTTPS origin, DID, and handle and creates the initial signed
 repository commit. Eyre serves `describeRepo`, `getRecord`, `listRecords`,
 `createRecord`, `putRecord`, `deleteRecord`, transactional `applyWrites`,
-`getLatestCommit`, CAR `getRepo`, and CAR `getBlocks` XRPC methods.
-Writes currently require an authenticated Eyre session. The public-service
-roadmap covers AT account sessions/OAuth provider behavior, blob storage,
-additional sync queries, DID publication, and the WebSocket federation edge.
+`uploadBlob`, `getLatestCommit`, `getRepoStatus`, `listRepos`, CAR `getRepo`,
+CAR `getBlocks`, `getBlob`, and `listBlobs` XRPC methods. Record writes and
+blob uploads require an authenticated Eyre session; repository and blob reads
+are public.
+
+Blob bytes live in the S3-compatible endpoint selected in the ship's
+`%storage` settings. `%atpro-pds` reads that endpoint, bucket, region, and
+credentials from `%storage`, signs private PUT/GET requests inside Gall, and
+persists only CID, MIME type, size, object key, and repository-revision
+metadata. Both HTTP and HTTPS self-hosted endpoints are supported. The active
+Storage service must expose credentials; browser-only presigned-URL mode does
+not provide Gall with the secret needed for server-side blob reads and writes.
+
+The remaining public-service work covers AT account sessions/OAuth provider
+behavior, blob reference validation and garbage collection, incremental sync
+ranges, DID publication, and the WebSocket federation edge.
 
 ## Event relay mode
 

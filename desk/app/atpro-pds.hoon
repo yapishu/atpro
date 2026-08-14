@@ -1,9 +1,13 @@
 ::  Ship-native single-account AT Protocol PDS through Eyre.
 /-  atpro-pds, atpro-repo-types
 /+  atpro-oauth, atpro-repo, atpro-repository, atpro-commit, atpro-tid
-/+  dbug, default-agent, server
+/+  atpro-s3, dbug, default-agent, server
 |%
 +$  card  card:agent:gall
++$  blob-request
+  $%  [%put eyre-id=@ta blob=stored-blob:atpro-pds]
+      [%get eyre-id=@ta blob=stored-blob:atpro-pds]
+  ==
 ::
 ++  string-at
   |=  [key=@t jon=json]
@@ -83,6 +87,58 @@
   ^-  simple-payload:http
   [[200 ~[['content-type' mime] ['cache-control' 'no-store']]] `bytes]
 ::
+++  blob-json
+  |=  blob=stored-blob:atpro-pds
+  ^-  json
+  =/  ref=json
+    (frond:enjs:format '$link' s+(cid-text:atpro-repo cid.blob))
+  %-  pairs:enjs:format
+  :~  ['$type' s+'blob']
+      ['ref' ref]
+      ['mimeType' s+mime.blob]
+      ['size' n+(scot %ud size.blob)]
+  ==
+::
+++  storage-settings
+  |=  [our=@p now=@da]
+  ^-  (unit [credentials=credentials:atpro-s3 configuration=configuration:atpro-s3])
+  =/  found-credentials=(unit json)
+    %-  mole
+    |.(.^(json %gx /(scot %p our)/storage/(scot %da now)/credentials/json))
+  ?~  found-credentials  ~
+  =/  found-configuration=(unit json)
+    %-  mole
+    |.(.^(json %gx /(scot %p our)/storage/(scot %da now)/configuration/json))
+  ?~  found-configuration  ~
+  =/  get-string
+    |=  [jon=json keys=(list @t)]
+    ^-  @t
+    ?~  keys  ?:(?=([%s *] jon) p.jon '')
+    ?.  ?=([%o *] jon)  ''
+    =/  value=(unit json)  (~(get by p.jon) i.keys)
+    ?~  value  ''
+    $(jon u.value, keys t.keys)
+  =/  credentials=credentials:atpro-s3
+    :*  (get-string u.found-credentials ~['storage-update' 'credentials' 'endpoint'])
+        (get-string u.found-credentials ~['storage-update' 'credentials' 'accessKeyId'])
+        (get-string u.found-credentials ~['storage-update' 'credentials' 'secretAccessKey'])
+    ==
+  =/  configuration=configuration:atpro-s3
+    :*  (get-string u.found-configuration ~['storage-update' 'configuration' 'currentBucket'])
+        (get-string u.found-configuration ~['storage-update' 'configuration' 'region'])
+    ==
+  =/  service=@t
+    (get-string u.found-configuration ~['storage-update' 'configuration' 'service'])
+  ?.  =('credentials' service)  ~
+  ?.  ?&  !=('' access-key-id.credentials)
+          !=('' secret-access-key.credentials)
+          !=('' endpoint.credentials)
+          !=('' current-bucket.configuration)
+          !=('' region.configuration)
+      ==
+    ~
+  `[credentials configuration]
+::
 ++  error-json
   |=  [status=@ud error=@t message=@t]
   ^-  simple-payload:http
@@ -128,12 +184,42 @@
   =/  stored=stored-record:atpro-pds  (make-stored u.collection u.rkey u.value)
   `(~(put by records) key stored)
 ::
+++  commit-swap-ok
+  |=  [jon=json head=(unit cid:atpro-repo-types)]
+  ^-  ?
+  =/  swap=(unit @t)  (string-at 'swapCommit' jon)
+  ?~  swap  %.y
+  ?~  head  %.n
+  =(u.swap (cid-text:atpro-repo u.head))
+::
+++  record-swap-ok
+  |=  [jon=json record=(unit stored-record:atpro-pds)]
+  ^-  ?
+  =/  swap=(unit json)  (json-at 'swapRecord' jon)
+  ?~  swap  %.y
+  ?:  =(~ u.swap)
+    ?=(~ record)
+  ?.  ?=(%s -.u.swap)  %.n
+  ?~  record  %.n
+  =(p.u.swap (cid-text:atpro-repo cid.u.record))
+::
+++  find-block
+  |=  [text=@t blocks=(list block:atpro-repo-types)]
+  ^-  (unit block:atpro-repo-types)
+  |-
+  ?~  blocks  ~
+  ?:  =(text (cid-text:atpro-repo cid.i.blocks))
+    `i.blocks
+  $(blocks t.blocks)
+::
 ++  config-json
   |=  $:  config=pds-config:atpro-pds
           records=@ud
+          blobs=@ud
           head=(unit cid:atpro-repo-types)
           rev=(unit @t)
           sequence=@ud
+          history=@ud
       ==
   ^-  json
   %-  pairs:enjs:format
@@ -143,15 +229,19 @@
       ['handle' s+handle.config]
       ['signingKey' s+(did-key:atpro-commit private-key.config)]
       ['records' n+(scot %ud records)]
+      ['blobs' n+(scot %ud blobs)]
       ['head' ?~(head ~+(~) s+(cid-text:atpro-repo u.head))]
       ['rev' ?~(rev ~+(~) s+u.rev)]
       ['sequence' n+(scot %ud sequence)]
+      ['history' n+(scot %ud history)]
   ==
 --
 ::
 %-  agent:dbug
 =|  state-0:atpro-pds
 =*  state  -
+=/  in-flight  *(map @uv blob-request)
+=/  request-count=@ud  0
 ^-  agent:gall
 |_  =bowl:gall
 +*  this  .
@@ -160,7 +250,7 @@
 ++  on-init
   ^-  (quip card _this)
   =/  key=@  (make-private-key:atpro-oauth (shas %atpro-pds-key eny.bowl))
-  =.  state  [%0 [%.n '' '' '' key (mod eny.bowl 32)] *(map @t stored-record:atpro-pds) ~ ~ ~ ~ [0 0] 0 ~]
+  =.  state  [%0 [%.n '' '' '' key (mod eny.bowl 32)] *(map @t stored-record:atpro-pds) *(map @t stored-blob:atpro-pds) ~ ~ ~ ~ [0 0] ~ 0 ~]
   :_  this
   :~  [%pass /eyre/xrpc %arvo %e %connect [~ /xrpc] dap.bowl]
       [%pass /eyre/admin %arvo %e %connect [~ /apps/atpro/pds] dap.bowl]
@@ -172,7 +262,7 @@
   |=  old=vase
   ^-  (quip card _this)
   =/  loaded=state-0:atpro-pds  !<(state-0:atpro-pds old)
-  :_  this(state loaded)
+  :_  this(state loaded, in-flight ~, request-count 0)
   :~  [%pass /eyre/xrpc %arvo %e %connect [~ /xrpc] dap.bowl]
       [%pass /eyre/admin %arvo %e %connect [~ /apps/atpro/pds] dap.bowl]
   ==
@@ -191,6 +281,17 @@
     ^-  (quip card _this)
     [(give-simple-payload:app:server eyre-id payload) this]
   ::
+  ++  queue-blob
+    |=  [context=blob-request request=request:http]
+    ^-  (quip card _this)
+    =/  request-id=@uv
+      `@uv`(shas %atpro-pds-request (cat 3 eny.bowl request-count))
+    =.  request-count  +(request-count)
+    =.  in-flight  (~(put by in-flight) request-id context)
+    :_  this
+    :~  [%pass /iris/(scot %uv request-id) %arvo %i %request request *outbound-config:iris]
+    ==
+  ::
   ++  parse-body
     |=  req=inbound-request:eyre
     ^-  (unit json)
@@ -208,12 +309,14 @@
       [map-key (json-ipld value.record)]
     =/  snap=repo-snapshot:atpro-repo-types
       (snapshot:atpro-repository did.config tid.next-tid head values private-key.config)
+    =/  since=(unit @t)  rev
     =.  head  `head.snap
     =.  rev  `rev.snap
     =.  last-timestamp  `timestamp.next-tid
     =.  blocks  blocks.snap
     =.  car  car.snap
     =.  sequence  +(sequence)
+    =.  history  [[head.snap rev.snap since blocks.snap car.snap sequence] history]
     =.  events  [[sequence rev.snap head.snap operation changed-key] events]
     this
   ::
@@ -247,6 +350,10 @@
     =/  rkey=@t  ?~(requested tid.generated u.requested)
     =/  key=@t  (rap 3 ~[u.collection '/' rkey])
     =/  existing=(unit stored-record:atpro-pds)  (~(get by records) key)
+    ?.  (commit-swap-ok jon head)
+      (reply eyre-id (error-json 400 'InvalidSwap' 'swapCommit does not match the current commit'))
+    ?.  (record-swap-ok jon existing)
+      (reply eyre-id (error-json 400 'InvalidSwap' 'swapRecord does not match the current record'))
     ?:  &(create-only ?=(^ existing))
       (reply eyre-id (error-json 400 'RecordAlreadyExists' 'record already exists'))
     =/  stored=stored-record:atpro-pds  (make-stored u.collection rkey u.value)
@@ -268,7 +375,7 @@
       ?:  ?&  ?=(%'GET' method.request.req)
               ?=([%status ~] t.t.t.site)
           ==
-        (reply eyre-id (json-payload 200 (config-json config (lent ~(tap by records)) head rev sequence)))
+        (reply eyre-id (json-payload 200 (config-json config (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
       ?.  ?&  ?=(%'POST' method.request.req)
               ?=([%configure ~] t.t.t.site)
           ==
@@ -285,7 +392,7 @@
       ?~  handle  (reply eyre-id (error-json 400 'InvalidRequest' 'missing handle'))
       =.  config  [u.enabled u.origin u.did u.handle private-key.config clock.config]
       =?  this  &(u.enabled ?=(~ head))  (rebuild %init '')
-      (reply eyre-id (json-payload 200 (config-json config (lent ~(tap by records)) head rev sequence)))
+      (reply eyre-id (json-payload 200 (config-json config (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
     ?.  enabled.config
       (reply eyre-id (error-json 503 'ServiceUnavailable' 'PDS is disabled'))
     ?.  =('xrpc' i.site)
@@ -293,6 +400,11 @@
     ?~  t.site  (reply eyre-id (error-json 404 'XRPCNotSupported' 'missing method'))
     =/  method=@t  i.t.site
     ?:  =('com.atproto.repo.describeRepo' method)
+      =/  requested=(unit @t)  (arg-at 'repo' args.rl)
+      ?.  ?&  ?=(^ requested)
+              ?|(=(u.requested did.config) =(u.requested handle.config))
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
       =/  collections=(list json)
         %+  turn  ~(tap by records)
         |=  [key=@t record=stored-record:atpro-pds]
@@ -307,16 +419,26 @@
         ==
       (reply eyre-id (json-payload 200 jon))
     ?:  =('com.atproto.repo.getRecord' method)
+      =/  requested=(unit @t)  (arg-at 'repo' args.rl)
       =/  collection=(unit @t)  (arg-at 'collection' args.rl)
       =/  rkey=(unit @t)  (arg-at 'rkey' args.rl)
-      ?.  ?&(?=(^ collection) ?=(^ rkey))
-        (reply eyre-id (error-json 400 'InvalidRequest' 'missing collection or rkey'))
+      ?.  ?&  ?=(^ requested)
+              ?|(=(u.requested did.config) =(u.requested handle.config))
+              ?=(^ collection)
+              ?=(^ rkey)
+          ==
+        (reply eyre-id (error-json 400 'InvalidRequest' 'invalid repo, collection, or rkey'))
       =/  found=(unit stored-record:atpro-pds)
         (~(get by records) (rap 3 ~[u.collection '/' u.rkey]))
       ?~  found  (reply eyre-id (error-json 400 'RecordNotFound' 'record not found'))
       (reply eyre-id (json-payload 200 (record-json did.config u.found)))
     ?:  =('com.atproto.repo.listRecords' method)
+      =/  requested=(unit @t)  (arg-at 'repo' args.rl)
       =/  collection=(unit @t)  (arg-at 'collection' args.rl)
+      ?.  ?&  ?=(^ requested)
+              ?|(=(u.requested did.config) =(u.requested handle.config))
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
       ?~  collection
         (reply eyre-id (error-json 400 'InvalidRequest' 'missing collection'))
       =/  matching=(list stored-record:atpro-pds)
@@ -342,12 +464,58 @@
         (snoc fields ['cursor' s+(scot %ud (add offset limit))])
       (reply eyre-id (json-payload 200 (pairs:enjs:format fields)))
     ?:  =('com.atproto.sync.getLatestCommit' method)
+      =/  requested=(unit @t)  (arg-at 'did' args.rl)
+      ?.  ?&  ?=(^ requested)
+              =(u.requested did.config)
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
       =/  jon=json
         (pairs:enjs:format ~[['cid' s+(cid-text:atpro-repo (need head))] ['rev' s+(need rev)]])
       (reply eyre-id (json-payload 200 jon))
+    ?:  =('com.atproto.sync.getRepoStatus' method)
+      =/  requested=(unit @t)  (arg-at 'did' args.rl)
+      ?.  ?&  ?=(^ requested)
+              =(u.requested did.config)
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
+      =/  jon=json
+        %-  pairs:enjs:format
+        :~  ['did' s+did.config]
+            ['active' b+%.y]
+            ['rev' s+(need rev)]
+        ==
+      (reply eyre-id (json-payload 200 jon))
+    ?:  =('com.atproto.sync.listRepos' method)
+      =/  cursor=(unit @t)  (arg-at 'cursor' args.rl)
+      =/  repos=(list json)
+        ?:  ?=(^ cursor)  ~
+        :~  %-  pairs:enjs:format
+            :~  ['did' s+did.config]
+                ['head' s+(cid-text:atpro-repo (need head))]
+                ['rev' s+(need rev)]
+                ['active' b+%.y]
+            ==
+        ==
+      (reply eyre-id (json-payload 200 (pairs:enjs:format ~[['repos' a+repos]])))
     ?:  =('com.atproto.sync.getRepo' method)
+      =/  requested=(unit @t)  (arg-at 'did' args.rl)
+      ?.  ?&  ?=(^ requested)
+              =(u.requested did.config)
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
+      =/  requested-since=(unit @t)  (arg-at 'since' args.rl)
+      =/  since-ok=?
+        ?~  requested-since  %.y
+        (lien history |=(version=repo-version:atpro-pds =(rev.version u.requested-since)))
+      ?.  since-ok
+        (reply eyre-id (error-json 400 'InvalidRequest' 'since revision is unavailable'))
       (reply eyre-id (bytes-payload 'application/vnd.ipld.car' car))
     ?:  =('com.atproto.sync.getBlocks' method)
+      =/  requested-did=(unit @t)  (arg-at 'did' args.rl)
+      ?.  ?&  ?=(^ requested-did)
+              =(u.requested-did did.config)
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
       =/  requested=(list @t)
         %+  turn
           %+  skim  args.rl
@@ -357,19 +525,85 @@
         value
       ?:  =(~ requested)
         (reply eyre-id (error-json 400 'InvalidRequest' 'missing cids'))
-      =/  selected=(list block:atpro-repo-types)
-        %+  skim  blocks
-        |=  block=block:atpro-repo-types
-        %+  lien  requested
-        |=  requested-cid=@t
-        =(requested-cid (cid-text:atpro-repo cid.block))
-      ?.  =((lent requested) (lent selected))
+      =/  all-blocks=(list block:atpro-repo-types)
+        (zing (turn history |=(version=repo-version:atpro-pds blocks.version)))
+      ?.  (levy requested |=(requested-cid=@t ?=(^ (find-block requested-cid all-blocks))))
         (reply eyre-id (error-json 400 'InvalidRequest' 'one or more blocks are unavailable'))
+      =/  selected=(list block:atpro-repo-types)
+        (turn requested |=(requested-cid=@t (need (find-block requested-cid all-blocks))))
       (reply eyre-id (bytes-payload 'application/vnd.ipld.car' (car-v1-roots:atpro-repo ~ selected)))
+    ?:  =('com.atproto.sync.getBlob' method)
+      =/  requested-did=(unit @t)  (arg-at 'did' args.rl)
+      =/  requested-cid=(unit @t)  (arg-at 'cid' args.rl)
+      ?.  ?&  ?=(^ requested-did)
+              =(u.requested-did did.config)
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
+      ?~  requested-cid
+        (reply eyre-id (error-json 400 'InvalidRequest' 'missing cid'))
+      =/  blob=(unit stored-blob:atpro-pds)  (~(get by blobs) u.requested-cid)
+      ?~  blob
+        (reply eyre-id (error-json 400 'BlobNotFound' 'blob not found'))
+      =/  settings=(unit [credentials=credentials:atpro-s3 configuration=configuration:atpro-s3])
+        (storage-settings our.bowl now.bowl)
+      ?~  settings
+        (reply eyre-id (error-json 503 'ServiceUnavailable' 'S3 credentials are not configured in Storage'))
+      =/  signed=signed-request:atpro-s3
+        (sign:atpro-s3 'GET' mime.u.blob [0 0] credentials.u.settings configuration.u.settings object-key.u.blob now.bowl)
+      (queue-blob [%get eyre-id u.blob] [%'GET' url.signed headers.signed ~])
+    ?:  =('com.atproto.sync.listBlobs' method)
+      =/  requested-did=(unit @t)  (arg-at 'did' args.rl)
+      ?.  ?&  ?=(^ requested-did)
+              =(u.requested-did did.config)
+          ==
+        (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
+      =/  requested-since=(unit @t)  (arg-at 'since' args.rl)
+      =/  since-ok=?
+        ?~  requested-since  %.y
+        (lien history |=(version=repo-version:atpro-pds =(rev.version u.requested-since)))
+      ?.  since-ok
+        (reply eyre-id (error-json 400 'InvalidRequest' 'since revision is unavailable'))
+      =/  asked-limit=(unit @ud)
+        =/  raw=(unit @t)  (arg-at 'limit' args.rl)
+        ?~(raw ~ (slaw %ud u.raw))
+      =/  limit=@ud  ?~(asked-limit 500 (min 1.000 (max 1 u.asked-limit)))
+      =/  asked-offset=(unit @ud)
+        =/  raw=(unit @t)  (arg-at 'cursor' args.rl)
+        ?~(raw ~ (slaw %ud u.raw))
+      =/  offset=@ud  ?~(asked-offset 0 u.asked-offset)
+      =/  all=(list [@t stored-blob:atpro-pds])  ~(tap by blobs)
+      =/  remaining=(list [@t stored-blob:atpro-pds])  (slag offset all)
+      =/  page=(list [@t stored-blob:atpro-pds])  (scag limit remaining)
+      =/  fields=(list [@t json])
+        ~[['cids' a+(turn page |=([cid-text=@t blob=stored-blob:atpro-pds] s+cid-text))]]
+      =?  fields  (gth (lent remaining) limit)
+        (snoc fields ['cursor' s+(scot %ud (add offset limit))])
+      (reply eyre-id (json-payload 200 (pairs:enjs:format fields)))
     ?.  ?=(%'POST' method.request.req)
       (reply eyre-id (error-json 404 'XRPCNotSupported' 'method not supported'))
     ?.  authenticated.req
       (reply eyre-id (error-json 401 'AuthenticationRequired' 'write authentication required'))
+    ?:  =('com.atproto.repo.uploadBlob' method)
+      ?~  body.request.req
+        (reply eyre-id (error-json 400 'InvalidRequest' 'missing blob body'))
+      ?:  (gth p.u.body.request.req 52.428.800)
+        (reply eyre-id (error-json 413 'PayloadTooLarge' 'blob exceeds 50 MiB'))
+      =/  content-type=(unit @t)
+        (get-header:http 'content-type' header-list.request.req)
+      ?~  content-type
+        (reply eyre-id (error-json 400 'InvalidRequest' 'missing blob content type'))
+      =/  cid=cid:atpro-repo-types  (cid-for-raw:atpro-repo u.body.request.req)
+      =/  cid-text=@t  (cid-text:atpro-repo cid)
+      =/  object-key=@t  (rap 3 ~['atpro/' did.config '/' cid-text])
+      =/  blob=stored-blob:atpro-pds
+        [cid u.content-type p.u.body.request.req object-key rev]
+      =/  settings=(unit [credentials=credentials:atpro-s3 configuration=configuration:atpro-s3])
+        (storage-settings our.bowl now.bowl)
+      ?~  settings
+        (reply eyre-id (error-json 503 'ServiceUnavailable' 'S3 credentials are not configured in Storage'))
+      =/  signed=signed-request:atpro-s3
+        (sign:atpro-s3 'PUT' u.content-type u.body.request.req credentials.u.settings configuration.u.settings object-key now.bowl)
+      (queue-blob [%put eyre-id blob] [%'PUT' url.signed headers.signed `u.body.request.req])
     =/  jon=(unit json)  (parse-body req)
     ?~  jon  (reply eyre-id (error-json 400 'InvalidRequest' 'invalid JSON body'))
     ?:  =('com.atproto.repo.createRecord' method)
@@ -387,8 +621,13 @@
           ==
         (reply eyre-id (error-json 400 'InvalidRequest' 'invalid repo, collection, or rkey'))
       =/  key=@t  (rap 3 ~[u.collection '/' u.rkey])
-      ?.  (~(has by records) key)
+      =/  existing=(unit stored-record:atpro-pds)  (~(get by records) key)
+      ?~  existing
         (reply eyre-id (error-json 400 'RecordNotFound' 'record not found'))
+      ?.  (commit-swap-ok u.jon head)
+        (reply eyre-id (error-json 400 'InvalidSwap' 'swapCommit does not match the current commit'))
+      ?.  (record-swap-ok u.jon existing)
+        (reply eyre-id (error-json 400 'InvalidSwap' 'swapRecord does not match the current record'))
       =.  records  (~(del by records) key)
       =.  this  (rebuild %delete key)
       =/  commit=json
@@ -404,6 +643,8 @@
           ==
         (reply eyre-id (error-json 400 'InvalidRequest' 'invalid repo or writes'))
       =/  items=(list json)  p.u.writes
+      ?.  (commit-swap-ok u.jon head)
+        (reply eyre-id (error-json 400 'InvalidSwap' 'swapCommit does not match the current commit'))
       ?:  (gth (lent items) 200)
         (reply eyre-id (error-json 400 'InvalidRequest' 'too many writes'))
       =/  working=(map @t stored-record:atpro-pds)  records
@@ -433,7 +674,7 @@
   ^-  (unit (unit cage))
   ?+  path  [~ ~]
       [%x %status ~]
-    ``json+!>((config-json config (lent ~(tap by records)) head rev sequence))
+    ``json+!>((config-json config (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history)))
   ==
 ::
 ++  on-leave  on-leave:def
@@ -447,6 +688,44 @@
       ~?  !accepted.sign  [dap.bowl %binding-rejected binding.sign]
       [~ this]
     [~ this]
+  ::
+      [%iris @ ~]
+    =/  request-id=(unit @uv)  (slaw %uv i.t.wire)
+    ?~  request-id  `this
+    =/  context=(unit blob-request)  (~(get by in-flight) u.request-id)
+    ?~  context  `this
+    =.  in-flight  (~(del by in-flight) u.request-id)
+    =/  eyre-id=@ta
+      ?-  -.u.context
+          %put  eyre-id.u.context
+          %get  eyre-id.u.context
+      ==
+    ?.  ?=([%iris %http-response *] sign)
+      :_  this
+      (give-simple-payload:app:server eyre-id (error-json 502 'UpstreamFailure' 'S3 request failed'))
+    =/  response=client-response:iris  client-response.sign
+    ?.  ?=(%finished -.response)
+      :_  this
+      (give-simple-payload:app:server eyre-id (error-json 502 'UpstreamFailure' 'S3 response was incomplete'))
+    =/  status=@ud  status-code.response-header.response
+    ?.  &((gte status 200) (lth status 300))
+      :_  this
+      (give-simple-payload:app:server eyre-id (error-json 502 'UpstreamFailure' 'S3 rejected the request'))
+    ?-  -.u.context
+        %put
+      =/  text=@t  (cid-text:atpro-repo cid.blob.u.context)
+      =.  blobs  (~(put by blobs) text blob.u.context)
+      =/  jon=json
+        (frond:enjs:format 'blob' (blob-json blob.u.context))
+      :_  this
+      (give-simple-payload:app:server eyre-id (json-payload 200 jon))
+    ::
+        %get
+      =/  data=octs
+        ?~(full-file.response [0 0] data.u.full-file.response)
+      :_  this
+      (give-simple-payload:app:server eyre-id (bytes-payload mime.blob.u.context data))
+    ==
   ==
 ::
 ++  on-fail  on-fail:def

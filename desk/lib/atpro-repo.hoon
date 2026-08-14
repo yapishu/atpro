@@ -117,6 +117,13 @@
   ::  CIDv1, dag-cbor (0x71), sha2-256 (0x12), 32-byte digest.
   [36 (cat 3 0x2012.7101 digest)]
 ::
+++  cid-for-raw
+  |=  bytes=octs
+  ^-  cid:atpro-repo-types
+  =/  digest=@  (shay bytes)
+  ::  CIDv1, raw binary (0x55), sha2-256 (0x12), 32-byte digest.
+  [36 (cat 3 0x2012.5501 digest)]
+::
 ++  cid-for-ipld
   |=  value=ipld:atpro-repo-types
   ^-  cid:atpro-repo-types

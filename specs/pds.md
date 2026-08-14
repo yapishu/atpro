@@ -38,14 +38,16 @@ Implementation status:
 
 The `%atpro-pds` Gall state contains service configuration, the P-256 signing
 key, repository head and revision, a record index, current blocks and CAR,
-monotonic revision state, and a sequenced mutation log. Its `state-0` is a
-single-account model.
+retained signed snapshots, blob metadata, monotonic revision state, and a
+sequenced mutation log. Its sole state type is the single-account `state-0`.
 
-The blob-storage checkpoint uses the ship's configured `%storage` service and
-its S3-compatible backend. Gall retains hashes, ownership, references, MIME
-type, size, quota, and garbage-collection state; storage credentials remain
-behind the ship boundary. Configuration discovery follows the `%boox`
-integration pattern.
+Blob storage uses the ship's configured `%storage` service and its
+S3-compatible backend. Configuration discovery follows the `%boox` JSON scry
+pattern. Gall reads the configured endpoint, bucket, region, access key, and
+secret; signs private S3-compatible PUT/GET requests; and retains the raw CID,
+MIME type, size, object key, and upload revision. Credentials remain behind
+the ship/browser boundary. The configured endpoint controls the hostname and
+HTTP/HTTPS scheme; no vendor endpoint is substituted.
 
 Repository mutation is transactional: validate the Lexicon-shaped record,
 write referenced blocks, build the new MST, sign one commit, advance the head,
@@ -58,14 +60,20 @@ Eyre currently serves:
 
 - authenticated PDS configuration and status at `/apps/atpro/pds`;
 - `com.atproto.repo.describeRepo`, `getRecord`, cursor-based `listRecords`,
-  `createRecord`, `putRecord`, `deleteRecord`, and atomic `applyWrites`;
-- `com.atproto.sync.getLatestCommit`, CAR `getRepo`, and CAR `getBlocks`.
+  `createRecord`, `putRecord`, `deleteRecord`, atomic `applyWrites`, and binary
+  `uploadBlob`;
+- `com.atproto.sync.getLatestCommit`, `getRepoStatus`, single-account
+  `listRepos`, CAR `getRepo`, CAR `getBlocks`, binary `getBlob`, and
+  cursor-based `listBlobs`;
+- commit and record compare-and-swap guards plus retained signed snapshots for
+  historical block lookup and revision validation.
 
 The HTTP/authentication checkpoint extends this surface with:
 
 - identity, account, session, and OAuth discovery/token endpoints;
-- remaining `com.atproto.repo` record and blob operations;
-- block, blob, cursor, and status endpoints in `com.atproto.sync`;
+- blob-reference verification, untethered-blob expiry, quota enforcement, and
+  object deletion;
+- incremental CAR ranges after a retained `since` revision;
 - repository description, preferences, and service configuration endpoints;
 - DID documents and protected-resource metadata for the configured HTTPS
   origin.
@@ -88,10 +96,9 @@ That client role and PDS federation role use separate credentials and queues.
 
 ## Delivery order
 
-1. complete record transaction swap guards and commit-history retention;
-2. blob storage, reference tracking, and CAR/sync range reads;
-3. account sessions plus OAuth provider endpoints;
-4. DID document/service publication and public HTTPS interoperability tests;
-5. WebSocket federation edge and Relay interoperability tests;
-6. backups, account import/export, quotas, abuse controls, and operational
+1. add blob reference tracking, untethered cleanup, and CAR/sync range reads;
+2. add account sessions plus OAuth provider endpoints;
+3. add DID document/service publication and public HTTPS interoperability tests;
+4. add the WebSocket federation edge and Relay interoperability tests;
+5. add backups, account import/export, quotas, abuse controls, and operational
    health surfaces.

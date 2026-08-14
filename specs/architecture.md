@@ -88,16 +88,17 @@ cross the Gall/browser boundary.
   DID document caching, authenticated configuration, curated posts, and cursor
   pagination;
 - a separate `state-0` PDS agent with canonical repository encoding, upstream
-  MST vectors, P-256 signed commits, monotonic revisions, CAR snapshots, and
-  initial repository and sync XRPC methods.
+  MST vectors, P-256 signed commits, monotonic revisions, retained CAR
+  snapshots, compare-and-swap writes, S3-compatible blob upload/download via
+  the ship's `%storage` settings, and repository/sync XRPC methods.
 
 ## Roadmap
 
 1. Add typed client actions for ship-native XRPC callers, sharing the same
    destination and NSID policy as HTTP.
-2. Complete PDS record transactions, commit retention, and sync block queries.
-3. Add blob storage through the ship's configured `%storage` service, account
-   sessions, OAuth provider behavior, and DID service lifecycle.
+2. Add PDS blob reference validation, untethered cleanup, and incremental CAR
+   ranges.
+3. Add account sessions, OAuth provider behavior, and DID service lifecycle.
 4. Pair the Eyre sync HTTP surface with a small WebSocket edge for
    `com.atproto.sync.subscribeRepos` federation.
 
