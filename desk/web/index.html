@@ -8,7 +8,10 @@
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <title>%atpro</title>
   <style>
-    :root { color-scheme:light; --paper:#f3f0e7; --ink:#161613; --quiet:#69685f; --line:#a6a298; --wash:#e7e3d8; --signal:#275b4d; --bad:#8c2d22; }
+    :root { color-scheme:light; --paper:#f3f0e7; --panel:#f8f6ef; --ink:#161613; --quiet:#69685f; --line:#a6a298; --wash:#e7e3d8; --signal:#275b4d; --bad:#8c2d22; }
+    @media (prefers-color-scheme:dark) { :root { color-scheme:dark; --paper:#171815; --panel:#1d1f1b; --ink:#e9e5d9; --quiet:#aaa79d; --line:#55584f; --wash:#282b25; --signal:#77b7a3; --bad:#e18376; } }
+    :root[data-theme="light"] { color-scheme:light; --paper:#f3f0e7; --panel:#f8f6ef; --ink:#161613; --quiet:#69685f; --line:#a6a298; --wash:#e7e3d8; --signal:#275b4d; --bad:#8c2d22; }
+    :root[data-theme="dark"] { color-scheme:dark; --paper:#171815; --panel:#1d1f1b; --ink:#e9e5d9; --quiet:#aaa79d; --line:#55584f; --wash:#282b25; --signal:#77b7a3; --bad:#e18376; }
     * { box-sizing:border-box }
     html { background:var(--paper) }
     body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper); font:14px/1.5 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace }
@@ -16,11 +19,15 @@
     button { cursor:pointer }
     h1,h2,h3,p { margin:0 }
     .app { width:min(940px,100%); margin:0 auto; padding:28px 22px 64px }
-    header { display:flex; align-items:baseline; justify-content:space-between; gap:24px; padding:0 0 17px; border-bottom:2px solid var(--ink); margin-bottom:22px }
+    header { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 0 17px; border-bottom:2px solid var(--ink); margin-bottom:22px }
     h1 { font-size:22px; line-height:1; letter-spacing:-.04em; font-weight:700 }
+    .header-tools { display:flex; align-items:center; gap:12px }
     .status { color:var(--quiet); font-size:12px; text-align:right }
     .dot { display:inline-block; width:7px; height:7px; margin-right:7px; border:1px solid var(--quiet); vertical-align:1px }
     .dot.on { background:var(--signal); border-color:var(--signal) }
+    .refresh-icon { width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--ink); color:var(--ink); background:transparent; font-size:18px; line-height:1 }
+    .refresh-icon:hover { color:var(--paper); background:var(--ink) }
+    .refresh-icon.busy { animation:spin .7s steps(8) infinite }
     .layout { display:grid; grid-template-columns:172px minmax(0,680px); gap:24px; align-items:start }
     nav { position:sticky; top:18px; border-top:1px solid var(--ink) }
     nav > button { width:100%; display:block; border:0; border-bottom:1px solid var(--line); padding:9px 2px; color:var(--quiet); background:transparent; text-align:left }
@@ -36,13 +43,13 @@
     .settings-body strong { display:block; margin-bottom:2px; font-size:12px }
     .meta { color:var(--quiet); font-size:10px }
     .settings-body button { width:100%; margin-top:8px; text-align:left }
-    .oauth-option { margin-top:10px; padding-top:8px; border-top:1px dotted var(--line); color:var(--quiet); font-size:10px }
-    .oauth-option input { width:auto; margin:0 5px 0 0; vertical-align:-2px }
-    main { min-height:560px; border:1px solid var(--ink); background:#f8f6ef }
+    .setting-option { margin-top:10px; padding-top:8px; border-top:1px dotted var(--line); color:var(--quiet); font-size:10px }
+    .setting-option input { width:auto; margin:0 5px 0 0; vertical-align:-2px }
+    main { min-height:560px; border:1px solid var(--ink); background:var(--panel) }
     .section-head { min-height:47px; padding:13px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--ink) }
     .section-head h2 { font-size:13px; font-weight:700 }
     .section-head h2::before { content:':: '; color:var(--signal) }
-    .panel { border:1px solid var(--ink); background:#f8f6ef }
+    .panel { border:1px solid var(--ink); background:var(--panel) }
     .eyebrow { color:var(--signal); font-size:11px; text-transform:uppercase; letter-spacing:.08em }
     .ghost,.primary,.danger { border:1px solid var(--ink); padding:6px 9px; color:var(--ink); background:transparent }
     .ghost:hover,.primary:hover { color:var(--paper); background:var(--ink) }
@@ -74,6 +81,11 @@
     .name { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
     .handle,.time { color:var(--quiet); font-size:11px }
     .body { margin-top:5px; white-space:pre-wrap; overflow-wrap:anywhere; font-family:ui-sans-serif,system-ui,sans-serif; line-height:1.45 }
+    .post-media { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; margin-top:10px }
+    .post-media[data-count="1"] { grid-template-columns:1fr }
+    .media-frame { display:block; min-width:0; border:1px solid var(--line); background:var(--wash); overflow:hidden }
+    .media-frame img { display:block; width:100%; height:100%; max-height:430px; object-fit:cover }
+    .media-frame:hover { border-color:var(--signal) }
     .post-stats { display:flex; gap:18px; margin-top:10px; color:var(--quiet); font-size:11px }
     .empty { padding:55px 24px; color:var(--quiet); text-align:center }
     .form-body { padding:16px }
@@ -92,6 +104,7 @@
     .profile-head .avatar { width:64px; height:64px }
     .profile-head .bio { margin-top:9px; font:13px/1.45 ui-sans-serif,system-ui,sans-serif; white-space:pre-wrap }
     .profile-stats { display:flex; gap:16px; margin-top:9px; color:var(--quiet); font-size:11px }
+    .profile-stats button { font-size:11px }
     .profile-actions { margin-top:10px }
     .subhead { padding:8px 16px; color:var(--quiet); border-bottom:1px solid var(--line); font-size:11px }
     .server-status { padding:11px 16px; color:var(--quiet); border-bottom:1px dotted var(--line); font-size:11px }
@@ -112,7 +125,10 @@
   <div class="app">
     <header>
       <h1>%atpro</h1>
-      <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Checking ship…</span></div>
+      <div class="header-tools">
+        <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Checking ship…</span></div>
+        <button id="globalRefresh" class="refresh-icon" type="button" aria-label="Refresh current view" title="Refresh current view">↻</button>
+      </div>
     </header>
 
     <section id="connectScreen" class="panel connect" hidden>
@@ -133,20 +149,21 @@
 
     <section id="client" class="layout" hidden>
       <nav aria-label="Primary">
-        <button class="active" data-view="timeline">%timeline</button>
-        <button data-view="notifications">%notices</button>
-        <button data-view="search">%find</button>
-        <button data-view="compose">%write</button>
-        <button data-view="serve">%serve</button>
-        <button id="refreshFeed" type="button">%refresh</button>
+        <button class="active" data-view="timeline">timeline</button>
+        <button data-view="notifications">notices</button>
+        <button data-view="search">find</button>
+        <button data-view="compose">write</button>
+        <button data-view="serve">serve</button>
         <details class="settings">
-          <summary>%settings</summary>
+          <summary>settings</summary>
           <div class="settings-body">
             <strong id="accountHandle"></strong>
             <div id="accountDid" class="meta"></div>
             <button id="refreshSession" class="ghost" type="button">refresh session</button>
             <button id="logout" class="danger" type="button">disconnect</button>
-            <label class="oauth-option"><input id="oauthPreference" type="checkbox">prefer OAuth on HTTPS</label>
+            <label class="setting-option"><input id="darkMode" type="checkbox">dark appearance</label>
+            <button id="systemTheme" class="ghost" type="button">follow system appearance</button>
+            <label class="setting-option"><input id="oauthPreference" type="checkbox">prefer OAuth on HTTPS</label>
             <div id="oauthNote" class="meta"></div>
           </div>
         </details>
@@ -162,7 +179,7 @@
           <div id="searchResults"><div class="empty">Search the public AT Protocol network.</div></div>
         </section>
         <section id="notifications" class="view">
-          <div class="section-head"><h2>notifications</h2><button id="refreshNotifications" class="back-link" type="button">refresh</button></div>
+          <div class="section-head"><h2>notifications</h2></div>
           <div id="notificationList"><div class="empty">No notifications loaded.</div></div>
         </section>
         <section id="compose" class="view">
@@ -176,8 +193,13 @@
           <div class="section-head"><h2>profile</h2><button class="back-link" data-back="timeline">&lt;- back</button></div>
           <div id="profileBody"><div class="empty">No profile selected.</div></div>
         </section>
+        <section id="people" class="view">
+          <div class="section-head"><h2 id="peopleTitle">people</h2><button class="back-link" data-back="profile">&lt;- profile</button></div>
+          <div id="peopleList"><div class="empty">No people loaded.</div></div>
+          <div class="form-body"><button id="loadMorePeople" class="ghost" type="button" hidden>load more</button></div>
+        </section>
         <section id="serve" class="view">
-          <div class="section-head"><h2>feed generator</h2><button id="refreshServer" class="back-link" type="button">refresh</button></div>
+          <div class="section-head"><h2>feed generator</h2></div>
           <div id="serverStatus" class="server-status">server state not loaded</div>
           <form id="serverForm" class="form-body">
             <label for="serverDid">service DID</label>
@@ -220,6 +242,7 @@
     let currentView = 'timeline';
     let currentProfile = null;
     let currentThread = null;
+    let currentGraph = null;
     let serverState = null;
 
     function escapeHtml(value = '') {
@@ -275,6 +298,40 @@
       if (seconds < 86400) return `${Math.floor(seconds/3600)}h`;
       return new Date(date).toLocaleDateString();
     }
+    function safeHttpUrl(value = '') {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:' ? escapeHtml(url.href) : '';
+      } catch { return ''; }
+    }
+    function embedHtml(embed) {
+      if (!embed) return '';
+      const media = embed.media || embed;
+      let images = [];
+      if (Array.isArray(media.images)) {
+        images = media.images.map(image => ({thumb:image.thumb, fullsize:image.fullsize, alt:image.alt, aspectRatio:image.aspectRatio}));
+      } else if (Array.isArray(media.items)) {
+        images = media.items.map(image => ({thumb:image.thumbnail || image.thumb, fullsize:image.fullsize, alt:image.alt, aspectRatio:image.aspectRatio}));
+      } else if (media.external?.thumb) {
+        images = [{thumb:media.external.thumb, fullsize:media.external.uri, alt:media.external.title}];
+      } else if (media.thumbnail) {
+        images = [{thumb:media.thumbnail, fullsize:media.thumbnail, alt:media.alt || 'Video thumbnail', aspectRatio:media.aspectRatio}];
+      }
+      images = images.filter(image => safeHttpUrl(image.thumb));
+      if (!images.length) return '';
+      const frames = images.map(image => {
+        const thumb = safeHttpUrl(image.thumb);
+        const target = safeHttpUrl(image.fullsize) || thumb;
+        const width = Number(image.aspectRatio?.width);
+        const height = Number(image.aspectRatio?.height);
+        const ratio = width > 0 && height > 0 ? ` style="aspect-ratio:${width}/${height}"` : '';
+        return `<a class="media-frame" data-media-link href="${target}" target="_blank" rel="noopener noreferrer"${ratio}><img src="${thumb}" alt="${escapeHtml(image.alt || '')}" loading="lazy"></a>`;
+      }).join('');
+      return `<div class="post-media" data-count="${images.length}">${frames}</div>`;
+    }
+    function personHtml(actor) {
+      return `<article class="person" data-actor="${escapeHtml(actor.did || actor.handle || '')}">${actor.avatar ? `<img class="avatar" src="${escapeHtml(actor.avatar)}" alt="">` : '<div class="avatar"></div>'}<div><div class="name">${escapeHtml(actor.displayName || actor.handle || 'Unknown')}</div><div class="handle">@${escapeHtml(actor.handle || '')}</div><div class="bio">${escapeHtml(actor.description || '')}</div></div></article>`;
+    }
     function postHtml(item, depth = 0, inThread = false) {
       const post = item.post || item;
       const author = post.author || {};
@@ -284,7 +341,7 @@
       const repostRecord = escapeHtml(post.viewer?.repost || '');
       const avatarImage = author.avatar ? `<img class="avatar" src="${escapeHtml(author.avatar)}" alt="">` : '<span class="avatar"></span>';
       const avatar = `<button class="avatar-button" data-actor="${actor}" aria-label="Open @${escapeHtml(author.handle || '')}">${avatarImage}</button>`;
-      return `<article class="post${inThread ? ' thread-post' : ''}" style="--depth:${Math.min(depth,4)}" data-uri="${escapeHtml(post.uri || '')}">${avatar}<div><div class="who"><button class="author-link name" data-actor="${actor}">${escapeHtml(author.displayName || author.handle || 'Unknown')}</button><span class="handle">@${escapeHtml(author.handle || '')}</span><span class="time">· ${escapeHtml(timeAgo(record.createdAt))}</span></div><div class="body">${escapeHtml(record.text || '')}</div><div class="post-stats"><button class="stat-link${likeRecord ? ' on' : ''}" data-action="like" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${likeRecord}">♡ ${post.likeCount || 0}</button><button class="stat-link${repostRecord ? ' on' : ''}" data-action="repost" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${repostRecord}">↻ ${post.repostCount || 0}</button><button class="stat-link" data-uri="${escapeHtml(post.uri || '')}">◌ ${post.replyCount || 0} replies</button></div></div></article>`;
+      return `<article class="post${inThread ? ' thread-post' : ''}" style="--depth:${Math.min(depth,4)}" data-uri="${escapeHtml(post.uri || '')}">${avatar}<div><div class="who"><button class="author-link name" data-actor="${actor}">${escapeHtml(author.displayName || author.handle || 'Unknown')}</button><span class="handle">@${escapeHtml(author.handle || '')}</span><span class="time">· ${escapeHtml(timeAgo(record.createdAt))}</span></div><div class="body">${escapeHtml(record.text || '')}</div>${embedHtml(post.embed)}<div class="post-stats"><button class="stat-link${likeRecord ? ' on' : ''}" data-action="like" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${likeRecord}">♡ ${post.likeCount || 0}</button><button class="stat-link${repostRecord ? ' on' : ''}" data-action="repost" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${repostRecord}">↻ ${post.repostCount || 0}</button><button class="stat-link" data-uri="${escapeHtml(post.uri || '')}">◌ ${post.replyCount || 0} replies</button></div></div></article>`;
     }
     async function loadTimeline() {
       $('#feed').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -307,8 +364,28 @@
         const following = escapeHtml(profile.viewer?.following || '');
         const own = profile.did === account.did;
         const follow = own ? '' : `<div class="profile-actions"><button class="ghost${following ? ' on' : ''}" data-action="follow" data-actor="${escapeHtml(profile.did)}" data-record="${following}">${following ? 'unfollow' : 'follow'}</button></div>`;
-        $('#profileBody').innerHTML = `<section class="profile-head">${avatar}<div><div class="name">${escapeHtml(profile.displayName || profile.handle)}</div><div class="handle">@${escapeHtml(profile.handle || '')}</div><div class="profile-stats"><span>${profile.followersCount || 0} followers</span><span>${profile.followsCount || 0} following</span><span>${profile.postsCount || 0} posts</span></div><div class="bio">${escapeHtml(profile.description || '')}</div>${follow}</div></section><div class="subhead">recent posts</div>${feed.feed?.length ? feed.feed.map(item => postHtml(item)).join('') : '<div class="empty">No posts found.</div>'}`;
+        $('#profileBody').innerHTML = `<section class="profile-head">${avatar}<div><div class="name">${escapeHtml(profile.displayName || profile.handle)}</div><div class="handle">@${escapeHtml(profile.handle || '')}</div><div class="profile-stats"><button class="stat-link" data-graph="followers" data-graph-actor="${escapeHtml(profile.did || profile.handle)}">${profile.followersCount || 0} followers</button><button class="stat-link" data-graph="following" data-graph-actor="${escapeHtml(profile.did || profile.handle)}">${profile.followsCount || 0} following</button><span>${profile.postsCount || 0} posts</span></div><div class="bio">${escapeHtml(profile.description || '')}</div>${follow}</div></section><div class="subhead">recent posts</div>${feed.feed?.length ? feed.feed.map(item => postHtml(item)).join('') : '<div class="empty">No posts found.</div>'}`;
       } catch (error) { $('#profileBody').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; notice(error.message, true); }
+    }
+    async function loadGraph(actor, kind, cursor = '', append = false) {
+      currentGraph = {actor, kind};
+      showView('people');
+      const title = kind === 'followers' ? 'followers' : 'following';
+      const nsid = kind === 'followers' ? 'app.bsky.graph.getFollowers' : 'app.bsky.graph.getFollows';
+      const resultKey = kind === 'followers' ? 'followers' : 'follows';
+      $('#peopleTitle').textContent = title;
+      if (!append) $('#peopleList').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+      $('#loadMorePeople').hidden = true;
+      try {
+        const query = `?actor=${encodeURIComponent(actor)}&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+        const data = await rpc('pds','GET',nsid,query);
+        const people = data[resultKey] || [];
+        const html = people.map(personHtml).join('');
+        if (append) $('#peopleList').insertAdjacentHTML('beforeend', html);
+        else $('#peopleList').innerHTML = html || `<div class="empty">No ${title} found.</div>`;
+        $('#loadMorePeople').dataset.cursor = data.cursor || '';
+        $('#loadMorePeople').hidden = !data.cursor;
+      } catch (error) { if (!append) $('#peopleList').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; notice(error.message, true); }
     }
     function threadHtml(node, depth = 0) {
       if (!node?.post) return `<div class="empty">${node?.notFound ? 'Post not found.' : 'Post unavailable.'}</div>`;
@@ -336,8 +413,10 @@
     function notificationHtml(item) {
       const author = item.author || {};
       const reason = {like:'liked your post', repost:'reposted your post', follow:'followed you', mention:'mentioned you', reply:'replied to you', quote:'quoted your post'}[item.reason] || item.reason || 'updated';
-      const avatar = author.avatar ? `<img class="avatar" src="${escapeHtml(author.avatar)}" alt="">` : '<div class="avatar"></div>';
-      return `<article class="notice-row${item.isRead ? '' : ' unread'}" data-notice-uri="${escapeHtml(item.reasonSubject || item.uri || '')}" data-actor="${escapeHtml(author.did || author.handle || '')}">${avatar}<div><div><strong>${escapeHtml(author.displayName || author.handle || 'Unknown')}</strong> ${escapeHtml(reason)}</div><div class="handle">@${escapeHtml(author.handle || '')} · ${escapeHtml(timeAgo(item.indexedAt))}</div></div></article>`;
+      const actor = escapeHtml(author.did || author.handle || '');
+      const avatarImage = author.avatar ? `<img class="avatar" src="${escapeHtml(author.avatar)}" alt="">` : '<span class="avatar"></span>';
+      const avatar = `<button class="avatar-button" data-actor="${actor}" aria-label="Open @${escapeHtml(author.handle || '')}">${avatarImage}</button>`;
+      return `<article class="notice-row${item.isRead ? '' : ' unread'}" data-notice-uri="${escapeHtml(item.reasonSubject || item.uri || '')}" data-notice-actor="${actor}">${avatar}<div><div><button class="author-link" data-actor="${actor}"><strong>${escapeHtml(author.displayName || author.handle || 'Unknown')}</strong></button> ${escapeHtml(reason)}</div><div class="handle">@${escapeHtml(author.handle || '')} · ${escapeHtml(timeAgo(item.indexedAt))}</div></div></article>`;
     }
     async function loadNotifications() {
       showView('notifications');
@@ -387,6 +466,15 @@
       document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === id));
       document.querySelectorAll('nav button').forEach(el => el.classList.toggle('active', el.dataset.view === id));
     }
+    async function refreshCurrentView() {
+      if (currentView === 'notifications') return loadNotifications();
+      if (currentView === 'profile' && currentProfile) return loadProfile(currentProfile);
+      if (currentView === 'thread' && currentThread) return loadThread(currentThread);
+      if (currentView === 'people' && currentGraph) return loadGraph(currentGraph.actor, currentGraph.kind);
+      if (currentView === 'serve') return loadServer();
+      if (currentView === 'search' && $('#searchQuery').value.trim()) return $('#searchForm').requestSubmit();
+      return loadTimeline();
+    }
 
     $('#loginForm').addEventListener('submit', async event => {
       event.preventDefault(); const button = event.submitter; button.disabled = true; button.textContent = 'Connecting…';
@@ -398,9 +486,16 @@
       finally { button.disabled = false; button.textContent = 'Connect through ship'; }
     });
     document.querySelectorAll('nav button[data-view]').forEach(button => button.addEventListener('click', () => button.dataset.view === 'notifications' ? loadNotifications() : button.dataset.view === 'serve' ? loadServer() : showView(button.dataset.view)));
-    $('#refreshFeed').addEventListener('click', loadTimeline);
-    $('#refreshNotifications').addEventListener('click', loadNotifications);
-    $('#refreshServer').addEventListener('click', loadServer);
+    $('#globalRefresh').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true; button.classList.add('busy');
+      try { await refreshCurrentView(); }
+      finally { button.disabled = false; button.classList.remove('busy'); }
+    });
+    $('#loadMorePeople').addEventListener('click', event => {
+      const cursor = event.currentTarget.dataset.cursor;
+      if (cursor && currentGraph) loadGraph(currentGraph.actor, currentGraph.kind, cursor, true);
+    });
     $('#refreshSession').addEventListener('click', async () => { try { setSession(await api('refresh', {})); notice('Session refreshed'); } catch (e) { notice(e.message, true); } });
     $('#logout').addEventListener('click', async () => { try { setSession(await api('logout', {})); } catch (e) { notice(e.message, true); } });
     $('#postText').addEventListener('input', event => $('#postCount').textContent = `${event.target.value.length} / 300`);
@@ -449,7 +544,7 @@
       $('#searchResults').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
       try {
         const data = await rpc('public','GET','app.bsky.actor.searchActors',`?q=${encodeURIComponent(q)}&limit=30`);
-        $('#searchResults').innerHTML = data.actors?.length ? data.actors.map(actor => `<article class="person" data-actor="${escapeHtml(actor.did || actor.handle)}">${actor.avatar ? `<img class="avatar" src="${escapeHtml(actor.avatar)}" alt="">` : '<div class="avatar"></div>'}<div><div class="name">${escapeHtml(actor.displayName || actor.handle)}</div><div class="handle">@${escapeHtml(actor.handle)}</div><div class="bio">${escapeHtml(actor.description || '')}</div></div></article>`).join('') : '<div class="empty">No profiles found.</div>';
+        $('#searchResults').innerHTML = data.actors?.length ? data.actors.map(personHtml).join('') : '<div class="empty">No profiles found.</div>';
       } catch (e) { $('#searchResults').innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`; notice(e.message, true); }
     });
     document.addEventListener('click', event => {
@@ -459,21 +554,37 @@
       if (action) { event.stopPropagation(); action.disabled = true; toggleRecord(action).catch(error => notice(error.message, true)).finally(() => action.disabled = false); return; }
       const removePost = event.target.closest('[data-remove-post]');
       if (removePost) { event.stopPropagation(); serverApi('remove-post',{post:removePost.dataset.removePost}).then(renderServer).catch(error => notice(error.message,true)); return; }
+      const graph = event.target.closest('[data-graph]');
+      if (graph) { event.stopPropagation(); loadGraph(graph.dataset.graphActor, graph.dataset.graph); return; }
+      const actor = event.target.closest('[data-actor]');
+      if (actor) { event.stopPropagation(); loadProfile(actor.dataset.actor); return; }
+      const mediaLink = event.target.closest('[data-media-link]');
+      if (mediaLink) { event.stopPropagation(); return; }
       const noticeRow = event.target.closest('[data-notice-uri]');
       if (noticeRow) {
         event.stopPropagation();
         const uri = noticeRow.dataset.noticeUri;
         if (uri.startsWith('at://') && uri.includes('/app.bsky.feed.post/')) loadThread(uri);
-        else loadProfile(noticeRow.dataset.actor);
+        else loadProfile(noticeRow.dataset.noticeActor);
         return;
       }
-      const actor = event.target.closest('[data-actor]');
-      if (actor) { event.stopPropagation(); loadProfile(actor.dataset.actor); return; }
       const post = event.target.closest('[data-uri]');
       if (post?.dataset.uri) loadThread(post.dataset.uri);
     });
 
     (async () => {
+      const themeMedia = matchMedia('(prefers-color-scheme: dark)');
+      const themeToggle = $('#darkMode');
+      const applyTheme = () => {
+        const preference = localStorage.getItem('atpro-theme') || 'system';
+        document.documentElement.dataset.theme = preference === 'system' ? '' : preference;
+        themeToggle.checked = preference === 'dark' || (preference === 'system' && themeMedia.matches);
+        $('#systemTheme').disabled = preference === 'system';
+      };
+      themeToggle.addEventListener('change', () => { localStorage.setItem('atpro-theme', themeToggle.checked ? 'dark' : 'light'); applyTheme(); });
+      $('#systemTheme').addEventListener('click', () => { localStorage.setItem('atpro-theme', 'system'); applyTheme(); });
+      themeMedia.addEventListener('change', applyTheme);
+      applyTheme();
       const oauthToggle = $('#oauthPreference');
       oauthToggle.disabled = location.protocol !== 'https:';
       oauthToggle.checked = location.protocol === 'https:' && localStorage.getItem('atpro-prefer-oauth') === 'true';
