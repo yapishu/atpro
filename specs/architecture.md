@@ -86,18 +86,19 @@ cross the Gall/browser boundary.
 - a bounded token-protected event webhook with allowlisted Ames distribution;
 - a separate `state-0` Feed Generator agent with public Eyre XRPC endpoints,
   DID document caching, authenticated configuration, curated posts, and cursor
-  pagination.
+  pagination;
+- a separate `state-0` PDS agent with canonical repository encoding, upstream
+  MST vectors, P-256 signed commits, monotonic revisions, CAR snapshots, and
+  initial repository and sync XRPC methods.
 
 ## Roadmap
 
 1. Add typed client actions for ship-native XRPC callers, sharing the same
    destination and NSID policy as HTTP.
-2. Build the PDS repository core: DAG-CBOR, CID/CAR, MST, signed commits, and
-   conformance vectors.
-3. Add blob storage through the ship's configured `%storage` service,
-   repository/account XRPC, OAuth provider behavior, and DID service/key
-   lifecycle.
-4. Expose sync HTTP through Eyre and pair it with a small WebSocket edge for
+2. Complete PDS record transactions, commit retention, and sync block queries.
+3. Add blob storage through the ship's configured `%storage` service, account
+   sessions, OAuth provider behavior, and DID service lifecycle.
+4. Pair the Eyre sync HTTP surface with a small WebSocket edge for
    `com.atproto.sync.subscribeRepos` federation.
 
 ## Upstream references

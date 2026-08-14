@@ -2,9 +2,9 @@
 
 <img width="1200" height="701" alt="image" src="https://github.com/user-attachments/assets/d94322ec-1c27-4dbd-a4cd-08edd7a0ecf8" />
 
-`%atpro` is a native AT Protocol client desk for Urbit. It connects to a
-Personal Data Server (PDS) over HTTPS/XRPC, keeps session credentials inside a
-Gall agent, and serves a small same-origin browser client.
+`%atpro` is a native AT Protocol desk for Urbit. It includes an HTTPS/XRPC
+client, a same-origin browser application, a Feed Generator, a bounded event
+relay, and a ship-native single-account PDS implementation.
 
 The desk supports:
 
@@ -22,12 +22,14 @@ The desk supports:
 - a constrained GET/POST XRPC bridge for authenticated Urbit users;
 - an optional AT Feed Generator served publicly through Eyre;
 - an optional token-protected event webhook and Ames/Gall relay.
+- deterministic AT repository blocks, signed commits, CAR exports, and a
+  single-account PDS served through Eyre.
 
 ## Architecture
 
-`%atpro` is a normal AT Protocol client, not an AT Relay or PDS. AT Protocol's
-network is federated client/server infrastructure; it is not a direct
-end-device peer-to-peer protocol.
+AT Protocol's network is federated client/server infrastructure; it is not a
+direct end-device peer-to-peer protocol. The main `%atpro` agent is a normal
+client. `%atpro-pds` owns a separate repository and exposes PDS XRPC methods.
 
 The `%atpro` Gall agent owns the PDS session and sends outbound HTTPS requests
 through `%iris`. The browser calls `/apps/atpro/api` through an authenticated
@@ -73,8 +75,25 @@ repository. The UI can publish that record and curate post URIs. Server mode
 remains disabled until explicitly configured.
 
 Running it on the public network requires a stable HTTPS hostname that reaches
-Eyre. The PDS track adds signed repositories/MSTs, CAR sync, blob storage,
-account and identity lifecycle, and federation availability.
+Eyre.
+
+## PDS mode
+
+`%atpro-pds` maintains one account and one signed AT repository in `state-0`.
+Its repository core provides deterministic DAG-CBOR, CIDv1 text and binary
+forms, CAR v1 framing, protocol-compatible Merkle Search Trees, monotonic TIDs,
+P-256 commit signing, and `did:key` generation. The MST fixtures match the
+empty, trivial, elevated-layer, and multi-node roots in the upstream AT
+Protocol implementation.
+
+Authenticated administration is available at `/apps/atpro/pds`. Enabling the
+service sets its HTTPS origin, DID, and handle and creates the initial signed
+repository commit. Eyre serves `describeRepo`, `getRecord`, `listRecords`,
+`createRecord`, `putRecord`, `deleteRecord`, transactional `applyWrites`,
+`getLatestCommit`, CAR `getRepo`, and CAR `getBlocks` XRPC methods.
+Writes currently require an authenticated Eyre session. The public-service
+roadmap covers AT account sessions/OAuth provider behavior, blob storage,
+additional sync queries, DID publication, and the WebSocket federation edge.
 
 ## Event relay mode
 
@@ -104,7 +123,7 @@ The build requires Zig 0.15.2 and Git 2.25 or newer.
 
 ```sh
 zig build
-zig build -Ddesk="$HOME/.urbit/lux/atpro"
+zig build -Ddesk="$HOME/.urbit/PIER/atpro"
 ```
 
 Commit the mounted desk and install it from the ship:
