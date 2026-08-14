@@ -1,5 +1,7 @@
 # `%atpro`
 
+## `|install ~matwet %atpro`
+
 <img width="1200" height="701" alt="image" src="https://github.com/user-attachments/assets/d94322ec-1c27-4dbd-a4cd-08edd7a0ecf8" />
 
 `%atpro` is a native AT Protocol desk for Urbit. It includes an HTTPS/XRPC
