@@ -28,7 +28,7 @@ through `%iris`. The browser calls `/apps/atpro/api` through an authenticated
 Eyre session. It can choose only the public AppView or the connected PDS,
 GET/POST, and a syntactically valid NSID, so it cannot turn the ship into a
 general-purpose HTTP proxy. `%atpro-fileserver` serves `/desk/web` at
-`/apps/atpro` using the current Boox fileserver pattern.
+`/apps/atpro` using the %fileserver pattern.
 
 ## Realtime limitation
 

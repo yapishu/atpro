@@ -1,4 +1,5 @@
 :~  %atpro
     %atpro-server
+    %atpro-relay
     %atpro-fileserver
 ==
