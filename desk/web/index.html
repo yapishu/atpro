@@ -3,87 +3,115 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#08111c">
+  <meta name="theme-color" content="#f3f0e7">
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <title>AT Protocol</title>
+  <title>%atpro</title>
   <style>
-    :root { color-scheme: dark; --bg:#07101a; --panel:#0d1926; --panel2:#111f2f; --line:#203247; --text:#eaf3fb; --muted:#8da3b8; --blue:#46a3ff; --cyan:#4de4d1; --bad:#ff7884; --good:#79e6b1; }
+    :root { color-scheme:light; --paper:#f3f0e7; --ink:#161613; --quiet:#69685f; --line:#a6a298; --wash:#e7e3d8; --signal:#275b4d; --bad:#8c2d22; }
     * { box-sizing:border-box }
-    body { margin:0; min-height:100vh; background:radial-gradient(circle at 20% 0,#12304b 0,transparent 36rem),var(--bg); color:var(--text); font:15px/1.45 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
-    button,input,textarea { font:inherit }
+    html { background:var(--paper) }
+    body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper); font:14px/1.5 ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace }
+    button,input,textarea { border-radius:0; font:inherit }
     button { cursor:pointer }
-    .app { width:min(1120px,100%); margin:auto; padding:24px }
-    header { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:22px }
-    .brand { display:flex; align-items:center; gap:12px }
-    .mark { width:42px; height:42px; display:grid; place-items:center; border:1px solid #2878a8; border-radius:13px; background:linear-gradient(145deg,#123454,#0b2033); color:var(--cyan); font-size:21px }
     h1,h2,h3,p { margin:0 }
-    h1 { font-size:19px; letter-spacing:.01em }
-    .eyebrow { color:var(--cyan); font:600 11px/1.2 ui-monospace,SFMono-Regular,monospace; letter-spacing:.12em; text-transform:uppercase }
-    .status { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:13px }
-    .dot { width:8px; height:8px; border-radius:50%; background:#526477 }
-    .dot.on { background:var(--good); box-shadow:0 0 12px #79e6b177 }
-    .layout { display:grid; grid-template-columns:210px minmax(0,620px) 1fr; gap:18px; align-items:start }
-    .panel { border:1px solid var(--line); border-radius:17px; background:#0d1926e8; box-shadow:0 18px 60px #0004 }
-    nav { padding:10px; position:sticky; top:18px }
-    nav button { width:100%; display:flex; gap:10px; align-items:center; border:0; border-radius:11px; padding:11px 12px; background:transparent; color:var(--muted); text-align:left }
-    nav button:hover,nav button.active { color:var(--text); background:var(--panel2) }
-    nav button.active { box-shadow:inset 3px 0 var(--cyan) }
-    main { min-height:560px; overflow:hidden }
-    .section-head { padding:18px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line) }
-    .section-head h2 { font-size:16px }
-    .ghost,.primary,.danger { border:1px solid var(--line); border-radius:10px; padding:8px 12px; color:var(--text); background:#132235 }
-    .ghost:hover { border-color:#3b5874 }
-    .primary { border-color:#318de0; background:#1776c9; font-weight:650 }
-    .primary:hover { background:#2288df }
-    .danger { color:#ffadb5; background:#35171d; border-color:#65303a }
-    .connect { max-width:520px; margin:60px auto; padding:30px }
-    .connect h2 { margin:8px 0 8px; font-size:25px }
-    .connect > p { color:var(--muted); margin-bottom:25px }
-    label { display:block; color:var(--muted); font-size:12px; margin:15px 0 7px }
-    input,textarea { width:100%; border:1px solid var(--line); border-radius:10px; background:#07111d; color:var(--text); padding:11px 12px; outline:none }
-    input:focus,textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px #46a3ff1c }
-    textarea { min-height:118px; resize:vertical }
-    .connect .primary { width:100%; margin-top:20px; padding:11px }
-    .hint { color:var(--muted); font-size:12px; margin-top:13px }
+    .app { width:min(940px,100%); margin:0 auto; padding:28px 22px 64px }
+    header { display:flex; align-items:baseline; justify-content:space-between; gap:24px; padding:0 0 17px; border-bottom:2px solid var(--ink); margin-bottom:22px }
+    h1 { font-size:22px; line-height:1; letter-spacing:-.04em; font-weight:700 }
+    .status { color:var(--quiet); font-size:12px; text-align:right }
+    .dot { display:inline-block; width:7px; height:7px; margin-right:7px; border:1px solid var(--quiet); vertical-align:1px }
+    .dot.on { background:var(--signal); border-color:var(--signal) }
+    .layout { display:grid; grid-template-columns:172px minmax(0,680px); gap:24px; align-items:start }
+    nav { position:sticky; top:18px; border-top:1px solid var(--ink) }
+    nav > button { width:100%; display:block; border:0; border-bottom:1px solid var(--line); padding:9px 2px; color:var(--quiet); background:transparent; text-align:left }
+    nav > button:hover,nav > button.active { color:var(--ink); padding-left:9px }
+    nav > button.active::before { content:'>'; margin-right:7px; color:var(--signal) }
+    nav > button:not(.active)::before { content:' '; margin-right:14px }
+    .settings { border-bottom:1px solid var(--line) }
+    .settings summary { padding:9px 2px; color:var(--quiet); cursor:pointer; list-style:none }
+    .settings summary::-webkit-details-marker { display:none }
+    .settings summary::before { content:'+ '; color:var(--signal) }
+    .settings[open] summary::before { content:'- ' }
+    .settings-body { padding:8px 2px 12px; border-top:1px dotted var(--line); overflow-wrap:anywhere }
+    .settings-body strong { display:block; margin-bottom:2px; font-size:12px }
+    .meta { color:var(--quiet); font-size:10px }
+    .settings-body button { width:100%; margin-top:8px; text-align:left }
+    .oauth-option { margin-top:10px; padding-top:8px; border-top:1px dotted var(--line); color:var(--quiet); font-size:10px }
+    .oauth-option input { width:auto; margin:0 5px 0 0; vertical-align:-2px }
+    main { min-height:560px; border:1px solid var(--ink); background:#f8f6ef }
+    .section-head { min-height:47px; padding:13px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--ink) }
+    .section-head h2 { font-size:13px; font-weight:700 }
+    .section-head h2::before { content:':: '; color:var(--signal) }
+    .panel { border:1px solid var(--ink); background:#f8f6ef }
+    .eyebrow { color:var(--signal); font-size:11px; text-transform:uppercase; letter-spacing:.08em }
+    .ghost,.primary,.danger { border:1px solid var(--ink); padding:6px 9px; color:var(--ink); background:transparent }
+    .ghost:hover,.primary:hover { color:var(--paper); background:var(--ink) }
+    .primary { background:var(--ink); color:var(--paper) }
+    .primary:hover { background:var(--signal); border-color:var(--signal) }
+    .danger { color:var(--bad); border-color:var(--bad) }
+    .danger:hover { color:var(--paper); background:var(--bad) }
+    .connect { max-width:510px; margin:58px auto; padding:26px }
+    .connect h2 { margin:8px 0; font-size:18px }
+    .connect > p { color:var(--quiet); margin-bottom:22px }
+    label { display:block; color:var(--quiet); font-size:11px; margin:14px 0 5px }
+    input,textarea { width:100%; border:1px solid var(--line); border-bottom-color:var(--ink); background:transparent; color:var(--ink); padding:8px 9px; outline:none }
+    input:focus,textarea:focus { border-color:var(--signal); box-shadow:inset 3px 0 var(--signal) }
+    textarea { min-height:128px; resize:vertical }
+    .connect .primary { width:100%; margin-top:18px; padding:9px }
+    .hint { color:var(--quiet); font-size:10px; margin-top:13px }
     .view { display:none }
     .view.active { display:block }
     .feed { min-height:200px }
-    .post { display:grid; grid-template-columns:44px 1fr; gap:12px; padding:17px 20px; border-bottom:1px solid var(--line) }
-    .avatar { width:44px; height:44px; border-radius:50%; background:#172c40; object-fit:cover }
-    .who { display:flex; gap:7px; align-items:baseline; min-width:0 }
+    .post { display:grid; grid-template-columns:36px 1fr; gap:11px; padding:15px 16px; border-bottom:1px dotted var(--line) }
+    .post:hover { background:var(--wash) }
+    .post[data-uri] { cursor:pointer }
+    .post.thread-post { margin-left:calc(var(--depth,0) * 14px); border-left:1px solid var(--line) }
+    .avatar { width:36px; height:36px; border:1px solid var(--line); background:var(--wash); object-fit:cover; filter:grayscale(20%) }
+    .avatar-button,.author-link,.stat-link,.back-link { border:0; padding:0; color:inherit; background:transparent; text-align:left }
+    .author-link:hover,.stat-link:hover,.back-link:hover { color:var(--signal); text-decoration:underline }
+    .stat-link.on { color:var(--signal); font-weight:700 }
+    .who { display:flex; gap:7px; align-items:baseline; min-width:0; flex-wrap:wrap }
     .name { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-    .handle,.time,.meta { color:var(--muted); font-size:12px }
-    .body { margin-top:5px; white-space:pre-wrap; overflow-wrap:anywhere }
-    .post-stats { display:flex; gap:20px; margin-top:12px; color:var(--muted); font-size:12px }
-    .empty { padding:55px 28px; color:var(--muted); text-align:center }
-    .form-body { padding:20px }
-    .form-row { display:flex; gap:10px; align-items:center; margin-top:12px }
+    .handle,.time { color:var(--quiet); font-size:11px }
+    .body { margin-top:5px; white-space:pre-wrap; overflow-wrap:anywhere; font-family:ui-sans-serif,system-ui,sans-serif; line-height:1.45 }
+    .post-stats { display:flex; gap:18px; margin-top:10px; color:var(--quiet); font-size:11px }
+    .empty { padding:55px 24px; color:var(--quiet); text-align:center }
+    .form-body { padding:16px }
+    .reply-form { padding:12px 16px; border-bottom:1px solid var(--ink); background:var(--wash) }
+    .reply-form textarea { min-height:72px }
+    .form-row { display:flex; gap:10px; align-items:center; margin-top:11px }
     .form-row .primary { margin-left:auto }
-    .count { color:var(--muted); font-variant-numeric:tabular-nums }
-    .search-box { display:flex; gap:9px; padding:15px 20px; border-bottom:1px solid var(--line) }
+    .count { color:var(--quiet); font-size:11px; font-variant-numeric:tabular-nums }
+    .search-box { display:flex; gap:8px; padding:12px 16px; border-bottom:1px dotted var(--line) }
     .search-box input { margin:0 }
-    .person { display:flex; gap:12px; padding:15px 20px; border-bottom:1px solid var(--line); align-items:center }
-    .person .bio { color:var(--muted); font-size:13px; margin-top:3px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
-    aside { padding:17px; position:sticky; top:18px }
-    aside h3 { font-size:13px; margin-bottom:10px }
-    aside p { color:var(--muted); font-size:12px }
-    .account { padding-bottom:15px; margin-bottom:15px; border-bottom:1px solid var(--line) }
-    .account strong { display:block; margin-top:7px; overflow-wrap:anywhere }
-    .actions { display:flex; gap:8px; margin-top:13px; flex-wrap:wrap }
-    .notice { position:fixed; right:22px; bottom:22px; max-width:390px; padding:12px 15px; border:1px solid #44566a; border-radius:11px; background:#132235; box-shadow:0 12px 45px #0008; transform:translateY(120px); opacity:0; transition:.2s; z-index:5 }
+    .person { display:flex; gap:11px; padding:13px 16px; border-bottom:1px dotted var(--line); align-items:center }
+    .person[data-actor] { cursor:pointer }
+    .person:hover { background:var(--wash) }
+    .person .bio { color:var(--quiet); font:12px/1.4 ui-sans-serif,system-ui,sans-serif; margin-top:3px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
+    .profile-head { display:grid; grid-template-columns:64px 1fr; gap:15px; padding:18px 16px; border-bottom:1px dotted var(--line) }
+    .profile-head .avatar { width:64px; height:64px }
+    .profile-head .bio { margin-top:9px; font:13px/1.45 ui-sans-serif,system-ui,sans-serif; white-space:pre-wrap }
+    .profile-stats { display:flex; gap:16px; margin-top:9px; color:var(--quiet); font-size:11px }
+    .profile-actions { margin-top:10px }
+    .subhead { padding:8px 16px; color:var(--quiet); border-bottom:1px solid var(--line); font-size:11px }
+    .server-status { padding:11px 16px; color:var(--quiet); border-bottom:1px dotted var(--line); font-size:11px }
+    .server-post { display:flex; gap:8px; align-items:center; padding:8px 16px; border-bottom:1px dotted var(--line) }
+    .server-post code { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis }
+    .notice-row { display:grid; grid-template-columns:36px 1fr; gap:11px; padding:13px 16px; border-bottom:1px dotted var(--line); cursor:pointer }
+    .notice-row:hover { background:var(--wash) }
+    .notice-row.unread { border-left:3px solid var(--signal); padding-left:13px }
+    .notice { position:fixed; right:18px; bottom:18px; max-width:390px; padding:10px 12px; border:1px solid var(--ink); background:var(--paper); box-shadow:5px 5px 0 var(--ink); transform:translateY(100px); opacity:0; transition:.16s; z-index:5 }
     .notice.show { transform:none; opacity:1 }
-    .notice.bad { border-color:#8b3e49; color:#ffd7da }
-    .spinner { width:18px; height:18px; border:2px solid #476076; border-top-color:var(--cyan); border-radius:50%; animation:spin .8s linear infinite; display:inline-block }
+    .notice.bad { border-color:var(--bad); color:var(--bad); box-shadow:5px 5px 0 var(--bad) }
+    .spinner { width:14px; height:14px; border:1px solid var(--line); border-top-color:var(--ink); border-radius:50%; animation:spin .7s steps(8) infinite; display:inline-block }
     @keyframes spin { to { transform:rotate(360deg) } }
-    @media (max-width:850px) { .layout { grid-template-columns:1fr } nav { position:static; display:flex; overflow:auto } nav button { width:auto; white-space:nowrap } aside { position:static; order:3 } }
-    @media (max-width:520px) { .app { padding:12px } header { padding:5px } .layout { gap:12px } .post { padding:15px } .connect { margin:25px auto; padding:22px } }
+    @media (max-width:700px) { .app { padding:18px 12px 48px } .layout { grid-template-columns:1fr; gap:16px } nav { position:static; display:grid; grid-template-columns:repeat(2,1fr) } nav > button,.settings { min-width:0 } .settings-body { position:absolute; z-index:3; width:220px; background:var(--paper); border:1px solid var(--ink); padding:10px } }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <div class="brand"><div class="mark">↗</div><div><div class="eyebrow">Urbit bridge</div><h1>AT Protocol</h1></div></div>
+      <h1>%atpro</h1>
       <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Checking ship…</span></div>
     </header>
 
@@ -104,35 +132,82 @@
     </section>
 
     <section id="client" class="layout" hidden>
-      <nav class="panel" aria-label="Primary">
-        <button class="active" data-view="timeline">◫ <span>Timeline</span></button>
-        <button data-view="search">⌕ <span>Find people</span></button>
-        <button data-view="compose">✦ <span>New post</span></button>
+      <nav aria-label="Primary">
+        <button class="active" data-view="timeline">%timeline</button>
+        <button data-view="notifications">%notices</button>
+        <button data-view="search">%find</button>
+        <button data-view="compose">%write</button>
+        <button data-view="serve">%serve</button>
+        <button id="refreshFeed" type="button">%refresh</button>
+        <details class="settings">
+          <summary>%settings</summary>
+          <div class="settings-body">
+            <strong id="accountHandle"></strong>
+            <div id="accountDid" class="meta"></div>
+            <button id="refreshSession" class="ghost" type="button">refresh session</button>
+            <button id="logout" class="danger" type="button">disconnect</button>
+            <label class="oauth-option"><input id="oauthPreference" type="checkbox">prefer OAuth on HTTPS</label>
+            <div id="oauthNote" class="meta"></div>
+          </div>
+        </details>
       </nav>
-      <main class="panel">
+      <main>
         <section id="timeline" class="view active">
-          <div class="section-head"><h2>Timeline</h2><button id="refreshFeed" class="ghost">Refresh</button></div>
+          <div class="section-head"><h2>timeline</h2></div>
           <div id="feed" class="feed"><div class="empty"><span class="spinner"></span></div></div>
         </section>
         <section id="search" class="view">
-          <div class="section-head"><h2>Find people</h2></div>
+          <div class="section-head"><h2>find people</h2></div>
           <form id="searchForm" class="search-box"><input id="searchQuery" placeholder="Name, handle, or keyword" required><button class="primary">Search</button></form>
           <div id="searchResults"><div class="empty">Search the public AT Protocol network.</div></div>
         </section>
+        <section id="notifications" class="view">
+          <div class="section-head"><h2>notifications</h2><button id="refreshNotifications" class="back-link" type="button">refresh</button></div>
+          <div id="notificationList"><div class="empty">No notifications loaded.</div></div>
+        </section>
         <section id="compose" class="view">
-          <div class="section-head"><h2>New post</h2></div>
+          <div class="section-head"><h2>new post</h2></div>
           <form id="postForm" class="form-body">
             <textarea id="postText" maxlength="300" placeholder="What’s happening?" required></textarea>
             <div class="form-row"><span id="postCount" class="count">0 / 300</span><button class="primary">Publish</button></div>
           </form>
         </section>
+        <section id="profile" class="view">
+          <div class="section-head"><h2>profile</h2><button class="back-link" data-back="timeline">&lt;- back</button></div>
+          <div id="profileBody"><div class="empty">No profile selected.</div></div>
+        </section>
+        <section id="serve" class="view">
+          <div class="section-head"><h2>feed generator</h2><button id="refreshServer" class="back-link" type="button">refresh</button></div>
+          <div id="serverStatus" class="server-status">server state not loaded</div>
+          <form id="serverForm" class="form-body">
+            <label for="serverDid">service DID</label>
+            <input id="serverDid" placeholder="did:web:feed.example.com" required>
+            <label for="serverEndpoint">public HTTPS endpoint</label>
+            <input id="serverEndpoint" type="url" placeholder="https://feed.example.com" required>
+            <label for="serverFeedUri">feed record URI</label>
+            <input id="serverFeedUri" placeholder="at://did:plc:.../app.bsky.feed.generator/urbit" required>
+            <label><input id="serverEnabled" type="checkbox" style="width:auto"> serve publicly</label>
+            <div class="form-row"><button class="primary">save server config</button></div>
+          </form>
+          <div class="subhead">publish feed record</div>
+          <form id="publishFeedForm" class="form-body">
+            <label for="feedName">display name</label><input id="feedName" maxlength="24" value="Urbit feed" required>
+            <label for="feedDescription">description</label><textarea id="feedDescription" maxlength="300" placeholder="Curated on an Urbit ship."></textarea>
+            <div class="form-row"><button class="primary">publish to my repository</button></div>
+          </form>
+          <div class="subhead">curated post URIs</div>
+          <form id="serverPostForm" class="search-box"><input id="serverPostUri" placeholder="at://did:.../app.bsky.feed.post/..." required><button class="primary">add</button></form>
+          <div id="serverPosts"><div class="empty">No posts.</div></div>
+        </section>
+        <section id="thread" class="view">
+          <div class="section-head"><h2>thread</h2><button class="back-link" data-back="timeline">&lt;- back</button></div>
+          <form id="replyForm" class="reply-form" hidden>
+            <textarea id="replyText" maxlength="300" placeholder="write a reply" required></textarea>
+            <div class="form-row"><span id="replyCount" class="count">0 / 300</span><button class="primary">Reply</button></div>
+          </form>
+          <div id="threadBody"><div class="empty">No thread selected.</div></div>
+        </section>
       </main>
-      <aside class="panel">
-        <div class="account"><div class="eyebrow">Connected PDS</div><strong id="accountHandle"></strong><div id="accountDid" class="meta"></div></div>
-        <h3>Realtime status</h3>
-        <p>Urbit has no WebSocket client, so this version polls only when you press Refresh. A Tap webhook companion can add live events later.</p>
-        <div class="actions"><button id="refreshSession" class="ghost">Refresh session</button><button id="logout" class="danger">Disconnect</button></div>
-      </aside>
     </section>
   </div>
   <div id="notice" class="notice" role="status"></div>
@@ -141,6 +216,11 @@
     const API = '/apps/atpro/api';
     const $ = (q) => document.querySelector(q);
     let account = null;
+    let replyContext = null;
+    let currentView = 'timeline';
+    let currentProfile = null;
+    let currentThread = null;
+    let serverState = null;
 
     function escapeHtml(value = '') {
       return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -153,10 +233,29 @@
       const response = await fetch(`${API}/${path}`, {method: body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers: body === undefined ? {} : {'content-type':'application/json'}, body: body === undefined ? undefined : JSON.stringify(body)});
       const text = await response.text();
       let data; try { data = text ? JSON.parse(text) : null; } catch { data = {error:text || `HTTP ${response.status}`}; }
+      if (!response.ok) {
+        const error = new Error(data?.message || data?.error || `HTTP ${response.status}`);
+        error.status = response.status; throw error;
+      }
+      return data;
+    }
+    async function serverApi(path, body) {
+      const response = await fetch(`/apps/atpro/server/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:body === undefined ? {} : {'content-type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
+      const text = await response.text(); let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = {error:text || `HTTP ${response.status}`}; }
       if (!response.ok) throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
       return data;
     }
-    const rpc = (target, method, nsid, query = '', body) => api('rpc', {target, method, nsid, query, ...(body === undefined ? {} : {body})});
+    async function rpc(target, method, nsid, query = '', body, retry = true) {
+      try { return await api('rpc', {target, method, nsid, query, ...(body === undefined ? {} : {body})}); }
+      catch (error) {
+        if (retry && target === 'pds' && error.status === 401) {
+          setSession(await api('refresh', {}));
+          return rpc(target, method, nsid, query, body, false);
+        }
+        throw error;
+      }
+    }
 
     function setSession(session) {
       account = session?.connected ? session : null;
@@ -176,21 +275,115 @@
       if (seconds < 86400) return `${Math.floor(seconds/3600)}h`;
       return new Date(date).toLocaleDateString();
     }
-    function postHtml(item) {
+    function postHtml(item, depth = 0, inThread = false) {
       const post = item.post || item;
       const author = post.author || {};
       const record = post.record || {};
-      const avatar = author.avatar ? `<img class="avatar" src="${escapeHtml(author.avatar)}" alt="">` : '<div class="avatar"></div>';
-      return `<article class="post">${avatar}<div><div class="who"><span class="name">${escapeHtml(author.displayName || author.handle || 'Unknown')}</span><span class="handle">@${escapeHtml(author.handle || '')}</span><span class="time">· ${escapeHtml(timeAgo(record.createdAt))}</span></div><div class="body">${escapeHtml(record.text || '')}</div><div class="post-stats"><span>♡ ${post.likeCount || 0}</span><span>↻ ${post.repostCount || 0}</span><span>◌ ${post.replyCount || 0}</span></div></div></article>`;
+      const actor = escapeHtml(author.did || author.handle || '');
+      const likeRecord = escapeHtml(post.viewer?.like || '');
+      const repostRecord = escapeHtml(post.viewer?.repost || '');
+      const avatarImage = author.avatar ? `<img class="avatar" src="${escapeHtml(author.avatar)}" alt="">` : '<span class="avatar"></span>';
+      const avatar = `<button class="avatar-button" data-actor="${actor}" aria-label="Open @${escapeHtml(author.handle || '')}">${avatarImage}</button>`;
+      return `<article class="post${inThread ? ' thread-post' : ''}" style="--depth:${Math.min(depth,4)}" data-uri="${escapeHtml(post.uri || '')}">${avatar}<div><div class="who"><button class="author-link name" data-actor="${actor}">${escapeHtml(author.displayName || author.handle || 'Unknown')}</button><span class="handle">@${escapeHtml(author.handle || '')}</span><span class="time">· ${escapeHtml(timeAgo(record.createdAt))}</span></div><div class="body">${escapeHtml(record.text || '')}</div><div class="post-stats"><button class="stat-link${likeRecord ? ' on' : ''}" data-action="like" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${likeRecord}">♡ ${post.likeCount || 0}</button><button class="stat-link${repostRecord ? ' on' : ''}" data-action="repost" data-uri="${escapeHtml(post.uri || '')}" data-cid="${escapeHtml(post.cid || '')}" data-record="${repostRecord}">↻ ${post.repostCount || 0}</button><button class="stat-link" data-uri="${escapeHtml(post.uri || '')}">◌ ${post.replyCount || 0} replies</button></div></div></article>`;
     }
     async function loadTimeline() {
       $('#feed').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
       try {
         const data = await rpc('pds','GET','app.bsky.feed.getTimeline','?limit=40');
-        $('#feed').innerHTML = data.feed?.length ? data.feed.map(postHtml).join('') : '<div class="empty">Your timeline is quiet.</div>';
+        $('#feed').innerHTML = data.feed?.length ? data.feed.map(item => postHtml(item)).join('') : '<div class="empty">Your timeline is quiet.</div>';
       } catch (error) { $('#feed').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; notice(error.message, true); }
     }
+    async function loadProfile(actor) {
+      currentProfile = actor;
+      showView('profile');
+      $('#profileBody').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+      try {
+        const query = `?actor=${encodeURIComponent(actor)}`;
+        const [profile, feed] = await Promise.all([
+          rpc('pds','GET','app.bsky.actor.getProfile',query),
+          rpc('pds','GET','app.bsky.feed.getAuthorFeed',`${query}&limit=30`)
+        ]);
+        const avatar = profile.avatar ? `<img class="avatar" src="${escapeHtml(profile.avatar)}" alt="">` : '<div class="avatar"></div>';
+        const following = escapeHtml(profile.viewer?.following || '');
+        const own = profile.did === account.did;
+        const follow = own ? '' : `<div class="profile-actions"><button class="ghost${following ? ' on' : ''}" data-action="follow" data-actor="${escapeHtml(profile.did)}" data-record="${following}">${following ? 'unfollow' : 'follow'}</button></div>`;
+        $('#profileBody').innerHTML = `<section class="profile-head">${avatar}<div><div class="name">${escapeHtml(profile.displayName || profile.handle)}</div><div class="handle">@${escapeHtml(profile.handle || '')}</div><div class="profile-stats"><span>${profile.followersCount || 0} followers</span><span>${profile.followsCount || 0} following</span><span>${profile.postsCount || 0} posts</span></div><div class="bio">${escapeHtml(profile.description || '')}</div>${follow}</div></section><div class="subhead">recent posts</div>${feed.feed?.length ? feed.feed.map(item => postHtml(item)).join('') : '<div class="empty">No posts found.</div>'}`;
+      } catch (error) { $('#profileBody').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; notice(error.message, true); }
+    }
+    function threadHtml(node, depth = 0) {
+      if (!node?.post) return `<div class="empty">${node?.notFound ? 'Post not found.' : 'Post unavailable.'}</div>`;
+      const replies = Array.isArray(node.replies) ? node.replies.map(reply => threadHtml(reply, depth + 1)).join('') : '';
+      return postHtml(node, depth, true) + replies;
+    }
+    async function loadThread(uri) {
+      if (!uri) return;
+      currentThread = uri;
+      showView('thread');
+      $('#threadBody').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+      try {
+        const data = await rpc('pds','GET','app.bsky.feed.getPostThread',`?uri=${encodeURIComponent(uri)}&depth=8&parentHeight=2`);
+        const selected = data.thread?.post;
+        if (selected) {
+          const parent = {uri:selected.uri, cid:selected.cid};
+          replyContext = {parent, root:selected.record?.reply?.root || parent};
+          $('#replyForm').hidden = false;
+        } else {
+          replyContext = null; $('#replyForm').hidden = true;
+        }
+        $('#threadBody').innerHTML = threadHtml(data.thread);
+      } catch (error) { $('#threadBody').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; notice(error.message, true); }
+    }
+    function notificationHtml(item) {
+      const author = item.author || {};
+      const reason = {like:'liked your post', repost:'reposted your post', follow:'followed you', mention:'mentioned you', reply:'replied to you', quote:'quoted your post'}[item.reason] || item.reason || 'updated';
+      const avatar = author.avatar ? `<img class="avatar" src="${escapeHtml(author.avatar)}" alt="">` : '<div class="avatar"></div>';
+      return `<article class="notice-row${item.isRead ? '' : ' unread'}" data-notice-uri="${escapeHtml(item.reasonSubject || item.uri || '')}" data-actor="${escapeHtml(author.did || author.handle || '')}">${avatar}<div><div><strong>${escapeHtml(author.displayName || author.handle || 'Unknown')}</strong> ${escapeHtml(reason)}</div><div class="handle">@${escapeHtml(author.handle || '')} · ${escapeHtml(timeAgo(item.indexedAt))}</div></div></article>`;
+    }
+    async function loadNotifications() {
+      showView('notifications');
+      $('#notificationList').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+      try {
+        const data = await rpc('pds','GET','app.bsky.notification.listNotifications','?limit=50');
+        $('#notificationList').innerHTML = data.notifications?.length ? data.notifications.map(notificationHtml).join('') : '<div class="empty">Nothing new.</div>';
+        await rpc('pds','POST','app.bsky.notification.updateSeen','',{seenAt:new Date().toISOString()});
+      } catch (error) { $('#notificationList').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; notice(error.message, true); }
+    }
+    function renderServer(state) {
+      serverState = state;
+      $('#serverDid').value = state.did || '';
+      $('#serverEndpoint').value = state.endpoint || '';
+      $('#serverFeedUri').value = state.feedUri || '';
+      $('#serverEnabled').checked = !!state.enabled;
+      $('#serverStatus').textContent = state.enabled ? `live: ${state.endpoint}` : 'disabled — configuration is private until enabled';
+      $('#serverPosts').innerHTML = state.posts?.length ? state.posts.map(post => `<div class="server-post"><code>${escapeHtml(post)}</code><button class="danger" data-remove-post="${escapeHtml(post)}">remove</button></div>`).join('') : '<div class="empty">No posts.</div>';
+    }
+    async function loadServer() {
+      showView('serve');
+      try { renderServer(await serverApi('status')); }
+      catch (error) { $('#serverStatus').textContent = error.message; notice(error.message, true); }
+    }
+    function parseAtUri(uri) {
+      const match = String(uri).match(/^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/);
+      return match ? {repo:match[1], collection:match[2], rkey:match[3]} : null;
+    }
+    async function toggleRecord(button) {
+      const action = button.dataset.action;
+      const existing = button.dataset.record;
+      if (existing) {
+        const record = parseAtUri(existing); if (!record) throw new Error('Invalid record URI');
+        await rpc('pds','POST','com.atproto.repo.deleteRecord','',{repo:account.did, collection:record.collection, rkey:record.rkey});
+      } else if (action === 'follow') {
+        await rpc('pds','POST','com.atproto.repo.createRecord','',{repo:account.did, collection:'app.bsky.graph.follow', record:{$type:'app.bsky.graph.follow', subject:button.dataset.actor, createdAt:new Date().toISOString()}});
+      } else {
+        const collection = action === 'like' ? 'app.bsky.feed.like' : 'app.bsky.feed.repost';
+        await rpc('pds','POST','com.atproto.repo.createRecord','',{repo:account.did, collection, record:{$type:collection, subject:{uri:button.dataset.uri,cid:button.dataset.cid}, createdAt:new Date().toISOString()}});
+      }
+      if (currentView === 'profile' && currentProfile) await loadProfile(currentProfile);
+      else if (currentView === 'thread' && currentThread) await loadThread(currentThread);
+      else await loadTimeline();
+    }
     function showView(id) {
+      currentView = id;
       document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === id));
       document.querySelectorAll('nav button').forEach(el => el.classList.toggle('active', el.dataset.view === id));
     }
@@ -204,11 +397,14 @@
       } catch (error) { notice(error.message, true); }
       finally { button.disabled = false; button.textContent = 'Connect through ship'; }
     });
-    document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+    document.querySelectorAll('nav button[data-view]').forEach(button => button.addEventListener('click', () => button.dataset.view === 'notifications' ? loadNotifications() : button.dataset.view === 'serve' ? loadServer() : showView(button.dataset.view)));
     $('#refreshFeed').addEventListener('click', loadTimeline);
+    $('#refreshNotifications').addEventListener('click', loadNotifications);
+    $('#refreshServer').addEventListener('click', loadServer);
     $('#refreshSession').addEventListener('click', async () => { try { setSession(await api('refresh', {})); notice('Session refreshed'); } catch (e) { notice(e.message, true); } });
     $('#logout').addEventListener('click', async () => { try { setSession(await api('logout', {})); } catch (e) { notice(e.message, true); } });
     $('#postText').addEventListener('input', event => $('#postCount').textContent = `${event.target.value.length} / 300`);
+    $('#replyText').addEventListener('input', event => $('#replyCount').textContent = `${event.target.value.length} / 300`);
     $('#postForm').addEventListener('submit', async event => {
       event.preventDefault(); const button = event.submitter; button.disabled = true; button.textContent = 'Publishing…';
       try {
@@ -217,16 +413,72 @@
       } catch (e) { notice(e.message, true); }
       finally { button.disabled = false; button.textContent = 'Publish'; }
     });
+    $('#replyForm').addEventListener('submit', async event => {
+      event.preventDefault(); if (!replyContext) return;
+      const button = event.submitter; button.disabled = true; button.textContent = 'Sending…';
+      try {
+        await rpc('pds','POST','com.atproto.repo.createRecord','', {repo:account.did, collection:'app.bsky.feed.post', record:{$type:'app.bsky.feed.post', text:$('#replyText').value, reply:replyContext, createdAt:new Date().toISOString()}});
+        const uri = replyContext.parent.uri; $('#replyText').value = ''; $('#replyCount').textContent = '0 / 300'; await loadThread(uri); notice('Reply published');
+      } catch (e) { notice(e.message, true); }
+      finally { button.disabled = false; button.textContent = 'Reply'; }
+    });
+    $('#serverForm').addEventListener('submit', async event => {
+      event.preventDefault(); const button = event.submitter; button.disabled = true;
+      try { renderServer(await serverApi('configure',{enabled:$('#serverEnabled').checked,did:$('#serverDid').value.trim(),endpoint:$('#serverEndpoint').value.trim().replace(/\/$/,''),feedUri:$('#serverFeedUri').value.trim()})); notice('Server configuration saved'); }
+      catch (error) { notice(error.message, true); }
+      finally { button.disabled = false; }
+    });
+    $('#serverPostForm').addEventListener('submit', async event => {
+      event.preventDefault(); const post = $('#serverPostUri').value.trim();
+      try { renderServer(await serverApi('add-post',{post})); $('#serverPostUri').value = ''; }
+      catch (error) { notice(error.message, true); }
+    });
+    $('#publishFeedForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const recordUri = parseAtUri($('#serverFeedUri').value.trim());
+      if (!recordUri || recordUri.repo !== account.did || recordUri.collection !== 'app.bsky.feed.generator') { notice('Feed URI must be an app.bsky.feed.generator record in your repository', true); return; }
+      const button = event.submitter; button.disabled = true;
+      try {
+        await rpc('pds','POST','com.atproto.repo.putRecord','',{repo:account.did,collection:recordUri.collection,rkey:recordUri.rkey,record:{$type:'app.bsky.feed.generator',did:$('#serverDid').value.trim(),displayName:$('#feedName').value.trim(),description:$('#feedDescription').value.trim(),createdAt:new Date().toISOString()}});
+        notice('Feed generator record published');
+      } catch (error) { notice(error.message, true); }
+      finally { button.disabled = false; }
+    });
     $('#searchForm').addEventListener('submit', async event => {
       event.preventDefault(); const q = $('#searchQuery').value.trim(); if (!q) return;
       $('#searchResults').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
       try {
         const data = await rpc('public','GET','app.bsky.actor.searchActors',`?q=${encodeURIComponent(q)}&limit=30`);
-        $('#searchResults').innerHTML = data.actors?.length ? data.actors.map(actor => `<article class="person">${actor.avatar ? `<img class="avatar" src="${escapeHtml(actor.avatar)}" alt="">` : '<div class="avatar"></div>'}<div><div class="name">${escapeHtml(actor.displayName || actor.handle)}</div><div class="handle">@${escapeHtml(actor.handle)}</div><div class="bio">${escapeHtml(actor.description || '')}</div></div></article>`).join('') : '<div class="empty">No profiles found.</div>';
+        $('#searchResults').innerHTML = data.actors?.length ? data.actors.map(actor => `<article class="person" data-actor="${escapeHtml(actor.did || actor.handle)}">${actor.avatar ? `<img class="avatar" src="${escapeHtml(actor.avatar)}" alt="">` : '<div class="avatar"></div>'}<div><div class="name">${escapeHtml(actor.displayName || actor.handle)}</div><div class="handle">@${escapeHtml(actor.handle)}</div><div class="bio">${escapeHtml(actor.description || '')}</div></div></article>`).join('') : '<div class="empty">No profiles found.</div>';
       } catch (e) { $('#searchResults').innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`; notice(e.message, true); }
+    });
+    document.addEventListener('click', event => {
+      const back = event.target.closest('[data-back]');
+      if (back) { showView(back.dataset.back); return; }
+      const action = event.target.closest('[data-action]');
+      if (action) { event.stopPropagation(); action.disabled = true; toggleRecord(action).catch(error => notice(error.message, true)).finally(() => action.disabled = false); return; }
+      const removePost = event.target.closest('[data-remove-post]');
+      if (removePost) { event.stopPropagation(); serverApi('remove-post',{post:removePost.dataset.removePost}).then(renderServer).catch(error => notice(error.message,true)); return; }
+      const noticeRow = event.target.closest('[data-notice-uri]');
+      if (noticeRow) {
+        event.stopPropagation();
+        const uri = noticeRow.dataset.noticeUri;
+        if (uri.startsWith('at://') && uri.includes('/app.bsky.feed.post/')) loadThread(uri);
+        else loadProfile(noticeRow.dataset.actor);
+        return;
+      }
+      const actor = event.target.closest('[data-actor]');
+      if (actor) { event.stopPropagation(); loadProfile(actor.dataset.actor); return; }
+      const post = event.target.closest('[data-uri]');
+      if (post?.dataset.uri) loadThread(post.dataset.uri);
     });
 
     (async () => {
+      const oauthToggle = $('#oauthPreference');
+      oauthToggle.disabled = location.protocol !== 'https:';
+      oauthToggle.checked = location.protocol === 'https:' && localStorage.getItem('atpro-prefer-oauth') === 'true';
+      $('#oauthNote').textContent = location.protocol === 'https:' ? 'preference saved; AT DPoP signing is not wired yet' : 'OAuth requires an HTTPS origin';
+      oauthToggle.addEventListener('change', () => localStorage.setItem('atpro-prefer-oauth', String(oauthToggle.checked)));
       try { const session = await api('status'); setSession(session); if (session.connected) await loadTimeline(); }
       catch (error) { $('#statusText').textContent = 'Ship API unavailable'; $('#connectScreen').hidden = false; notice(error.message, true); }
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});

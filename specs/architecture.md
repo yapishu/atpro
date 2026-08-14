@@ -79,17 +79,25 @@ DPoP proofs and nonce retry behavior. The local OAuth references are useful
 for redirect/state plumbing, but their JOSE support does not by itself satisfy
 the asymmetric signing profile required by AT Protocol.
 
+## Implemented second slice
+
+- profiles, author feeds, threads, replies, notifications, follows, likes, and
+  reposts in the browser client;
+- one refresh-and-retry after an authenticated PDS request returns 401;
+- a separate `state-0` Feed Generator agent with public Eyre XRPC endpoints,
+  DID document caching, authenticated configuration, curated posts, and cursor
+  pagination.
+
 ## Next implementation slices
 
 1. Add typed Gall actions and marks for ship-native callers, sharing the same
    policy checks as HTTP.
-2. Add proactive refresh and one safe refresh-and-retry on expired access JWTs.
-3. Add typed clients for notifications, threads, follows, likes, and reposts.
-4. Add binary-safe blob upload and image-post composition.
-5. Add handle/DID resolution so the PDS origin can be discovered automatically.
-6. Add the optional Tap webhook, cursor persistence, deduplication, and a
+2. Add binary-safe blob upload and image-post composition.
+3. Add handle/DID resolution so the PDS origin can be discovered automatically.
+4. Add the optional Tap webhook, cursor persistence, deduplication, and a
    bounded event queue.
-7. Add OAuth only after suitable P-256 or secp256k1 signing primitives exist.
+5. Add an Ames distribution layer for filtered AT event and curation messages.
+6. Add OAuth only after suitable P-256 or secp256k1 signing primitives exist.
 
 ## Upstream references
 

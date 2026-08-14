@@ -10,9 +10,12 @@ The first working slice supports:
 - persisted access and refresh JWTs, never returned to browser JavaScript;
 - timeline reads and manual refresh;
 - public actor search;
-- text-post creation;
+- profile and thread navigation;
+- text posts and replies;
+- likes, reposts, follows, and notifications;
 - local session refresh and disconnect;
 - a constrained GET/POST XRPC bridge for authenticated Urbit users.
+- an optional AT Feed Generator served publicly through Eyre.
 
 ## Architecture
 
@@ -49,6 +52,28 @@ Gall state. Browser status responses contain only service, DID, and handle.
 AT Protocol OAuth is intentionally deferred. A conforming implementation
 needs PKCE, PAR, DPoP, nonce handling, and asymmetric key support beyond the
 RSA-only JOSE primitives currently available in the referenced Urbit desks.
+The UI exposes an HTTPS-only preference hook, but labels it as unavailable
+until the DPoP signer is implemented; it does not silently downgrade AT OAuth
+to ordinary bearer-token OAuth.
+
+## Feed Generator server mode
+
+`%atpro-server` is a real AT Feed Generator service, not a full PDS. It serves:
+
+- `GET /xrpc/app.bsky.feed.describeFeedGenerator`
+- `GET /xrpc/app.bsky.feed.getFeedSkeleton`
+- `GET /.well-known/did.json` through Eyre's exact-response cache
+- authenticated administration at `/apps/atpro/server`
+
+Configure it in the `%serve` screen with a public HTTPS endpoint, matching
+`did:web`, and an `app.bsky.feed.generator` record URI in your connected
+repository. The UI can publish that record and curate post URIs. Server mode
+remains disabled until explicitly configured.
+
+Running it on the public network requires a stable HTTPS hostname that reaches
+Eyre. A full PDS remains a later project because it additionally requires
+signed repositories/MSTs, CAR sync, blob storage, account and identity
+lifecycle, federation ingestion, and operational availability.
 
 ## Build and install
 
