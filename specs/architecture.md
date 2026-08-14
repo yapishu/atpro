@@ -91,16 +91,17 @@ cross the Gall/browser boundary.
   MST vectors, P-256 signed commits, monotonic revisions, retained CAR
   snapshots, compare-and-swap writes, S3-compatible blob upload/download via
   the ship's `%storage` settings, app-password sessions with rotating HS256
-  JWTs, an AT OAuth authorization server, DPoP-authenticated writes, public
-  DID/OAuth metadata, and repository/sync XRPC methods.
+  JWTs, reference-checked DAG-CBOR blobs with quota and cleanup state,
+  incremental CAR sync, private preferences and migration status, an AT OAuth
+  authorization server, DID-audience service JWTs, DPoP-authenticated
+  writes, public DID/OAuth metadata, and repository/sync XRPC methods.
 
 ## Roadmap
 
 1. Add typed client actions for ship-native XRPC callers, sharing the same
    destination and NSID policy as HTTP.
-2. Add PDS blob reference validation, untethered cleanup, and incremental CAR
-   ranges.
-3. Add remote OAuth client-metadata retrieval and native-app redirect profiles.
+2. Add remote OAuth client-metadata retrieval and native-app redirect profiles.
+3. Add account import/export, backups, and automatic blob cleanup.
 4. Pair the Eyre sync HTTP surface with a small WebSocket edge for
    `com.atproto.sync.subscribeRepos` federation.
 

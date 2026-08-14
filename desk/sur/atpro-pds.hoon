@@ -59,7 +59,10 @@
       mime=@t
       size=@ud
       object-key=@t
-      uploaded-at=(unit @t)
+      uploaded-at=@ud
+      tethered=?
+      referenced-at=(unit @t)
+      references=(set @t)
   ==
 +$  repo-event
   $:  sequence=@ud
@@ -87,8 +90,10 @@
       oauth-sessions=(map @t oauth-session)
       dpop-jtis=(map @t @ud)
       oauth-count=@ud
+      preferences=(list json)
       records=(map @t stored-record)
       blobs=(map @t stored-blob)
+      pending-blob-deletes=(map @t stored-blob)
       head=(unit cid:atpro-repo-types)
       rev=(unit @t)
       last-timestamp=(unit @ud)

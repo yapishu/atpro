@@ -93,11 +93,16 @@ service sets its HTTPS origin, DID, and handle and creates the initial signed
 repository commit. Eyre serves `describeRepo`, `getRecord`, `listRecords`,
 `createRecord`, `putRecord`, `deleteRecord`, transactional `applyWrites`,
 `uploadBlob`, `getLatestCommit`, `getRepoStatus`, `listRepos`, CAR `getRepo`,
-CAR `getBlocks`, `getBlob`, and `listBlobs` XRPC methods. Record writes and
+CAR `getBlocks`, `getBlob`, `listBlobs`, and `listMissingBlobs` XRPC methods.
+`getRepo?since=` returns only blocks absent from the retained base revision,
+rooted at the current commit. `getRecord` returns a current-rooted CAR that
+proves record existence or non-existence. Record writes and
 blob uploads accept either an authenticated Eyre session or a valid PDS access
 token; repository and blob reads are public. The PDS also serves
 `describeServer`, `createSession`, `getSession`, `refreshSession`, and
-`deleteSession`. Access tokens expire after two hours, refresh tokens expire
+`deleteSession`, private `getPreferences`/`putPreferences`, and
+`checkAccountStatus` migration metrics. Authenticated clients can request
+method-bound ES256 `getServiceAuth` JWTs for DID audiences. Access tokens expire after two hours, refresh tokens expire
 after ninety days, refresh rotates both tokens, and deletion revokes the whole
 session.
 
@@ -126,16 +131,22 @@ not part of the accepted client profile.
 
 Blob bytes live in the S3-compatible endpoint selected in the ship's
 `%storage` settings. `%atpro-pds` reads that endpoint, bucket, region, and
-credentials from `%storage`, signs private PUT/GET requests inside Gall, and
-persists only CID, MIME type, size, object key, and repository-revision
-metadata. Both HTTP and HTTPS self-hosted endpoints are supported. The active
+credentials from `%storage`, signs private PUT/GET/DELETE requests inside Gall,
+and persists only CID, MIME type, size, object key, upload time, and
+record-reference metadata. Standard blob references become DAG-CBOR links only
+after their CID, MIME type, and size match a stored object. A single upload is
+limited to 50 MiB and the account blob quota is 1 GiB. Newly uploaded objects
+have a 24-hour untethered grace period; objects whose final record reference is
+removed are immediately eligible for cleanup. The authenticated `clean blobs`
+control schedules up to 50 eligible deletions per run and keeps failed objects
+available for retry. Both HTTP and HTTPS self-hosted endpoints are supported. The active
 Storage service must expose credentials; browser-only presigned-URL mode does
 not provide Gall with the secret needed for server-side blob reads and writes.
 
-The remaining public-service work covers blob reference validation and garbage
-collection, incremental sync ranges, remote client-metadata validation,
-native-app OAuth redirects, account lifecycle operations, and the WebSocket
-federation edge.
+The remaining public-service work covers automatic cleanup scheduling, remote
+client-metadata validation, native-app OAuth redirects, account lifecycle and
+import/export operations, backups, abuse controls, and the WebSocket federation
+edge.
 
 ## Event relay mode
 

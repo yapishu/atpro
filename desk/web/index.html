@@ -233,7 +233,7 @@
             <input id="pdsPassword" type="password" autocomplete="new-password" placeholder="leave blank to preserve it">
             <label><input id="pdsClearPassword" type="checkbox" style="width:auto"> remove the current app password</label>
             <label><input id="pdsEnabled" type="checkbox" style="width:auto"> serve repository and authorization endpoints</label>
-            <div class="form-row"><button class="primary">save PDS config</button></div>
+            <div class="form-row"><button class="primary">save PDS config</button><button id="pdsCleanup" class="ghost" type="button">clean blobs</button></div>
           </form>
           <div class="section-head"><h2>feed generator</h2></div>
           <div id="serverStatus" class="server-status">server state not loaded</div>
@@ -299,6 +299,12 @@
 
     function escapeHtml(value = '') {
       return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    }
+    function formatBytes(value = 0) {
+      if (value < 1024) return `${value} B`;
+      if (value < 1048576) return `${(value / 1024).toFixed(1)} KiB`;
+      if (value < 1073741824) return `${(value / 1048576).toFixed(1)} MiB`;
+      return `${(value / 1073741824).toFixed(2)} GiB`;
     }
     function notice(message, bad = false) {
       const el = $('#notice'); el.textContent = message; el.className = `notice show${bad ? ' bad' : ''}`;
@@ -525,8 +531,8 @@
       $('#pdsClearPassword').checked = false;
       $('#pdsEnabled').checked = !!state.enabled;
       $('#pdsStatus').textContent = state.enabled
-        ? `live · ${state.records || 0} records · ${state.blobs || 0} blobs · ${state.oauthSessions || 0} OAuth sessions · ${state.appPasswordConfigured ? 'app password set' : 'OAuth only'}`
-        : `disabled · ${state.records || 0} records retained`;
+        ? `live · ${state.records || 0} records · ${state.blobs || 0} blobs / ${formatBytes(state.blobBytes || 0)} · ${state.pendingBlobDeletes || 0} deleting · ${state.oauthSessions || 0} OAuth sessions · ${state.appPasswordConfigured ? 'app password set' : 'OAuth only'}`
+        : `disabled · ${state.records || 0} records retained · ${state.blobs || 0} blobs / ${formatBytes(state.blobBytes || 0)}`;
     }
     function renderRelay(state) {
       relayState = state;
@@ -665,6 +671,12 @@
       const body = {enabled:$('#pdsEnabled').checked, origin:$('#pdsOrigin').value.trim().replace(/\/$/,''), serviceDid:$('#pdsServiceDid').value.trim(), did:$('#pdsAccountDid').value.trim(), handle:$('#pdsHandle').value.trim(), clearAppPassword:$('#pdsClearPassword').checked};
       if ($('#pdsPassword').value) body.appPassword = $('#pdsPassword').value;
       try { renderPds(await pdsApi('configure', body)); notice('PDS configuration saved'); }
+      catch (error) { notice(error.message, true); }
+      finally { button.disabled = false; }
+    });
+    $('#pdsCleanup').addEventListener('click', async event => {
+      const button = event.currentTarget; button.disabled = true;
+      try { const result = await pdsApi('cleanup', {}); await loadServer(); notice(`${result.scheduled || 0} blob deletions scheduled`); }
       catch (error) { notice(error.message, true); }
       finally { button.disabled = false; }
     });

@@ -7,7 +7,38 @@
 +$  blob-request
   $%  [%put eyre-id=@ta blob=stored-blob:atpro-pds]
       [%get eyre-id=@ta blob=stored-blob:atpro-pds]
+      [%delete blob=stored-blob:atpro-pds]
   ==
++$  record-blob  [cid=@t mime=@t size=@ud]
+::
+++  decimal
+  |=  value=@ud
+  ^-  @t
+  (crip ((d-co:co 1) value))
+::
+++  parse-decimal
+  |=  text=@t
+  ^-  (unit @ud)
+  =/  chars=tape  (trip text)
+  ?~  chars  ~
+  =/  parse
+    |=  [remaining=tape value=@ud]
+    ^-  (unit @ud)
+    ?~  remaining  `value
+    ?.  ?&((gte i.remaining '0') (lte i.remaining '9'))  ~
+    $(remaining t.remaining, value (add (mul value 10) (sub i.remaining '0')))
+  (parse chars 0)
+::
+++  parse-signed-decimal
+  |=  text=@t
+  ^-  (unit @s)
+  =/  chars=tape  (trip text)
+  ?~  chars  ~
+  =/  negative=?  =('-' i.chars)
+  =/  magnitude=(unit @ud)
+    (parse-decimal (crip ?:(negative t.chars chars)))
+  ?~  magnitude  ~
+  `(new:si !negative u.magnitude)
 ::
 ++  string-at
   |=  [key=@t jon=json]
@@ -32,6 +63,14 @@
   ^-  (unit json)
   ?.  ?=(%o -.jon)  ~
   (~(get by p.jon) key)
+::
+++  nat-at
+  |=  [key=@t jon=json]
+  ^-  (unit @ud)
+  =/  value=(unit json)  (json-at key jon)
+  ?~  value  ~
+  ?.  ?=(%n -.u.value)  ~
+  (parse-decimal p.u.value)
 ::
 ++  arg-at
   |=  [key=@t args=(list [key=@t value=@t])]
@@ -231,7 +270,7 @@
     [%bool p.jon]
   ::
       [%n *]
-    =/  parsed=(unit @s)  (slaw %si p.jon)
+    =/  parsed=(unit @s)  (parse-signed-decimal p.jon)
     ?>  ?=(^ parsed)
     [%int u.parsed]
   ::
@@ -240,6 +279,42 @@
       %+  turn  ~(tap by p.jon)
       |=  [key=@t value=json]
       [key (json-ipld value)]
+    [%map entries]
+  ::
+      [%s *]
+    [%text p.jon]
+  ::
+      ~
+    [%null ~]
+  ==
+::
+++  record-json-ipld
+  |=  [jon=json stored=(map @t stored-blob:atpro-pds)]
+  ^-  ipld:atpro-repo-types
+  ?-  jon
+      [%a *]
+    [%list (turn p.jon |=(child=json (record-json-ipld child stored)))]
+  ::
+      [%b *]
+    [%bool p.jon]
+  ::
+      [%n *]
+    =/  parsed=(unit @s)  (parse-signed-decimal p.jon)
+    ?>  ?=(^ parsed)
+    [%int u.parsed]
+  ::
+      [%o *]
+    =/  link=(unit @t)  (string-at '$link' jon)
+    =/  blob=(unit stored-blob:atpro-pds)
+      ?~(link ~ (~(get by stored) u.link))
+    ?:  ?&  ?=(^ blob)
+            =(1 (lent ~(tap by p.jon)))
+        ==
+      [%link cid.u.blob]
+    =/  entries=(list [@t *])
+      %+  turn  ~(tap by p.jon)
+      |=  [key=@t value=json]
+      [key (record-json-ipld value stored)]
     [%map entries]
   ::
       [%s *]
@@ -294,7 +369,7 @@
   :~  ['$type' s+'blob']
       ['ref' ref]
       ['mimeType' s+mime.blob]
-      ['size' n+(scot %ud size.blob)]
+      ['size' n+(decimal size.blob)]
   ==
 ::
 ++  storage-settings
@@ -352,16 +427,155 @@
   ==
 ::
 ++  make-stored
-  |=  [collection=@t rkey=@t value=json]
+  |=  [collection=@t rkey=@t value=json blobs=(map @t stored-blob:atpro-pds)]
   ^-  stored-record:atpro-pds
   =/  key=@t  (rap 3 ~[collection '/' rkey])
-  =/  ipld=ipld:atpro-repo-types  (json-ipld value)
+  =/  ipld=ipld:atpro-repo-types  (record-json-ipld value blobs)
   =/  block=octs  (encode:atpro-repo ipld)
   =/  cid=cid:atpro-repo-types  (cid-for-cbor:atpro-repo block)
   [key collection rkey cid block value]
 ::
+++  record-blobs-valid
+  |=  jon=json
+  ^-  ?
+  ?-  jon
+      [%a *]
+    (levy p.jon record-blobs-valid)
+  ::
+      [%o *]
+    =/  kind=(unit @t)  (string-at '$type' jon)
+    ?:  ?&(?=(^ kind) =('blob' u.kind))
+      =/  ref=(unit json)  (json-at 'ref' jon)
+      =/  link=(unit @t)  ?~(ref ~ (string-at '$link' u.ref))
+      ?&  ?=(^ link)
+          ?=(^ (string-at 'mimeType' jon))
+          ?=(^ (nat-at 'size' jon))
+      ==
+    (levy (turn ~(tap by p.jon) |=([key=@t value=json] value)) record-blobs-valid)
+  ::
+      *
+    %.y
+  ==
+::
+++  record-blobs
+  |=  jon=json
+  ^-  (list record-blob)
+  ?-  jon
+      [%a *]
+    (zing (turn p.jon record-blobs))
+  ::
+      [%o *]
+    =/  kind=(unit @t)  (string-at '$type' jon)
+    ?:  ?&(?=(^ kind) =('blob' u.kind))
+      =/  ref=(unit json)  (json-at 'ref' jon)
+      =/  link=(unit @t)  ?~(ref ~ (string-at '$link' u.ref))
+      =/  mime=(unit @t)  (string-at 'mimeType' jon)
+      =/  size=(unit @ud)  (nat-at 'size' jon)
+      ?.  ?&(?=(^ link) ?=(^ mime) ?=(^ size))  ~
+      ~[[u.link u.mime u.size]]
+    (zing (turn ~(tap by p.jon) |=([key=@t value=json] (record-blobs value))))
+  ::
+      *
+    ~
+  ==
+::
+++  validate-record-blobs
+  |=  [candidate=(map @t stored-record:atpro-pds) stored=(map @t stored-blob:atpro-pds)]
+  ^-  (unit @t)
+  =/  records-left=(list [@t stored-record:atpro-pds])  ~(tap by candidate)
+  |-
+  ?~  records-left  ~
+  =/  entry=[key=@t record=stored-record:atpro-pds]  i.records-left
+  =/  record=stored-record:atpro-pds  record.entry
+  =/  error=(unit @t)  (validate-refs (record-blobs value.record) stored)
+  ?^  error  error
+  $(records-left t.records-left)
+::
+++  validate-refs
+  |=  [refs=(list record-blob) stored=(map @t stored-blob:atpro-pds)]
+  ^-  (unit @t)
+  ?~  refs  ~
+  =/  found=(unit stored-blob:atpro-pds)  (~(get by stored) cid.i.refs)
+  ?~  found  `'record references a blob that is not stored by this account'
+  ?.  =(mime.i.refs mime.u.found)
+    `'record blob MIME type does not match the stored object'
+  ?.  =(size.i.refs size.u.found)
+    `'record blob size does not match the stored object'
+  $(refs t.refs)
+::
+++  add-record-references
+  |=  [record-key=@t refs=(list record-blob) result=(map @t (set @t))]
+  ^-  (map @t (set @t))
+  ?~  refs  result
+  =/  current=(set @t)  (~(gut by result) cid.i.refs *(set @t))
+  =.  result  (~(put by result) cid.i.refs (~(put in current) record-key))
+  $(refs t.refs)
+::
+++  record-reference-map
+  |=  records=(map @t stored-record:atpro-pds)
+  ^-  (map @t (set @t))
+  =/  result  *(map @t (set @t))
+  =/  entries=(list [@t stored-record:atpro-pds])  ~(tap by records)
+  |-
+  ?~  entries  result
+  =/  entry=[record-key=@t record=stored-record:atpro-pds]  i.entries
+  =.  result  (add-record-references record-key.entry (record-blobs value.record.entry) result)
+  $(entries t.entries)
+::
+++  sync-blob-references
+  |=  $:  stored=(map @t stored-blob:atpro-pds)
+          records=(map @t stored-record:atpro-pds)
+          current-rev=@t
+      ==
+  ^-  (map @t stored-blob:atpro-pds)
+  =/  reference-map=(map @t (set @t))  (record-reference-map records)
+  %-  ~(gas by *(map @t stored-blob:atpro-pds))
+  %+  turn  ~(tap by stored)
+  |=  [key=@t blob=stored-blob:atpro-pds]
+  =/  refs=(set @t)  (~(gut by reference-map) key *(set @t))
+  =/  has-refs=?  ?=(^ ~(tap in refs))
+  :-  key
+  :*  cid.blob
+      mime.blob
+      size.blob
+      object-key.blob
+      uploaded-at.blob
+      |(tethered.blob has-refs)
+      ?:(has-refs `current-rev referenced-at.blob)
+      refs
+  ==
+::
+++  blob-bytes
+  |=  stored=(map @t stored-blob:atpro-pds)
+  ^-  @ud
+  %+  roll  ~(tap by stored)
+  |=  [[key=@t blob=stored-blob:atpro-pds] total=@ud]
+  (add size.blob total)
+::
+++  cleanup-eligible
+  |=  [blob=stored-blob:atpro-pds now=@ud]
+  ^-  ?
+  ?&  =(~ ~(tap in references.blob))
+      |(tethered.blob (gte now (add uploaded-at.blob 86.400)))
+  ==
+::
+++  find-version
+  |=  [requested=@t versions=(list repo-version:atpro-pds)]
+  ^-  (unit repo-version:atpro-pds)
+  |-
+  ?~  versions  ~
+  ?:  =(requested rev.i.versions)  `i.versions
+  $(versions t.versions)
+::
+++  delta-blocks
+  |=  [current=(list block:atpro-repo-types) previous=(list block:atpro-repo-types)]
+  ^-  (list block:atpro-repo-types)
+  %+  skim  current
+  |=  block=block:atpro-repo-types
+  ?=(~ (find-block (cid-text:atpro-repo cid.block) previous))
+::
 ++  apply-write
-  |=  [write=json records=(map @t stored-record:atpro-pds)]
+  |=  [write=json records=(map @t stored-record:atpro-pds) blobs=(map @t stored-blob:atpro-pds)]
   ^-  (unit (map @t stored-record:atpro-pds))
   =/  action=(unit @t)  (string-at '$type' write)
   =/  collection=(unit @t)  (string-at 'collection' write)
@@ -379,7 +593,9 @@
   ?:  &(update !exists)  ~
   =/  value=(unit json)  (json-at 'value' write)
   ?~  value  ~
-  =/  stored=stored-record:atpro-pds  (make-stored u.collection u.rkey u.value)
+  ?.  (record-blobs-valid u.value)  ~
+  ?^  (validate-refs (record-blobs u.value) blobs)  ~
+  =/  stored=stored-record:atpro-pds  (make-stored u.collection u.rkey u.value blobs)
   `(~(put by records) key stored)
 ::
 ++  commit-swap-ok
@@ -457,6 +673,29 @@
       ['active' b+%.y]
   ==
 ::
+++  service-jwt
+  |=  $:  issuer=@t
+          audience=@t
+          method=(unit @t)
+          issued-at=@ud
+          expires-at=@ud
+          entropy=@
+          private-key=@
+      ==
+  ^-  @t
+  =/  header=json
+    (pairs:enjs:format ~[['typ' s+'JWT'] ['alg' s+'ES256']])
+  =/  fields=(list [@t json])
+    :~  ['iat' n+(decimal issued-at)]
+        ['iss' s+issuer]
+        ['aud' s+audience]
+        ['exp' n+(decimal expires-at)]
+        ['jti' s+(token:atpro-oauth (shas %atpro-service-jti entropy))]
+    ==
+  =?  fields  ?=(^ method)
+    (snoc fields ['lxm' s+u.method])
+  (jwt:atpro-oauth header (pairs:enjs:format fields) private-key)
+::
 ++  account-json
   |=  config=pds-config:atpro-pds
   ^-  json
@@ -474,6 +713,8 @@
           oauth-requests=@ud
           records=@ud
           blobs=@ud
+          blob-bytes=@ud
+          pending-blob-deletes=@ud
           head=(unit cid:atpro-repo-types)
           rev=(unit @t)
           sequence=@ud
@@ -487,16 +728,19 @@
       ['did' s+did.config]
       ['handle' s+handle.config]
       ['appPasswordConfigured' b+?=(^ password-hash.auth)]
-      ['sessions' n+(scot %ud sessions)]
-      ['oauthSessions' n+(scot %ud oauth-sessions)]
-      ['oauthRequests' n+(scot %ud oauth-requests)]
+      ['sessions' n+(decimal sessions)]
+      ['oauthSessions' n+(decimal oauth-sessions)]
+      ['oauthRequests' n+(decimal oauth-requests)]
       ['signingKey' s+(did-key:atpro-commit private-key.config)]
-      ['records' n+(scot %ud records)]
-      ['blobs' n+(scot %ud blobs)]
+      ['records' n+(decimal records)]
+      ['blobs' n+(decimal blobs)]
+      ['blobBytes' n+(decimal blob-bytes)]
+      ['blobQuotaBytes' n+'1073741824']
+      ['pendingBlobDeletes' n+(decimal pending-blob-deletes)]
       ['head' ?~(head ~+(~) s+(cid-text:atpro-repo u.head))]
       ['rev' ?~(rev ~+(~) s+u.rev)]
-      ['sequence' n+(scot %ud sequence)]
-      ['history' n+(scot %ud history)]
+      ['sequence' n+(decimal sequence)]
+      ['history' n+(decimal history)]
   ==
 ::
 ++  protected-resource-json
@@ -589,7 +833,9 @@
         *(map @t oauth-session:atpro-pds)
         *(map @t @ud)
         0
+        ~
         *(map @t stored-record:atpro-pds)
+        *(map @t stored-blob:atpro-pds)
         *(map @t stored-blob:atpro-pds)
         ~  ~  ~  ~  [0 0]  ~  0  ~
     ==
@@ -610,6 +856,9 @@
   |=  old=vase
   ^-  (quip card _this)
   =/  loaded=state-0:atpro-pds  !<(state-0:atpro-pds old)
+  =.  blobs.loaded
+    (~(gas by blobs.loaded) ~(tap by pending-blob-deletes.loaded))
+  =.  pending-blob-deletes.loaded  ~
   :_  this(state loaded, in-flight ~, request-count 0)
   :~  [%pass /eyre/well-known-auth %arvo %e %disconnect [~ ~['.well-known' 'oauth-protected-resource']]]
       [%pass /eyre/well-known-server %arvo %e %disconnect [~ ~['.well-known' 'oauth-authorization-server']]]
@@ -645,6 +894,28 @@
     :_  this
     :~  [%pass /iris/(scot %uv request-id) %arvo %i %request request *outbound-config:iris]
     ==
+  ::
+  ++  queue-deletes
+    |=  $:  candidates=(list stored-blob:atpro-pds)
+            settings=[credentials=credentials:atpro-s3 configuration=configuration:atpro-s3]
+        ==
+    ^-  [(list card) _this]
+    =/  cards=(list card)  ~
+    |-
+    ?~  candidates  [(flop cards) this]
+    =/  blob=stored-blob:atpro-pds  i.candidates
+    =/  text=@t  (cid-text:atpro-repo cid.blob)
+    =/  signed=signed-request:atpro-s3
+      (sign:atpro-s3 'DELETE' 'application/octet-stream' [0 0] credentials.settings configuration.settings object-key.blob now.bowl)
+    =/  request-id=@uv
+      `@uv`(shas %atpro-pds-request (cat 3 eny.bowl request-count))
+    =.  request-count  +(request-count)
+    =.  in-flight  (~(put by in-flight) request-id [%delete blob])
+    =.  blobs  (~(del by blobs) text)
+    =.  pending-blob-deletes  (~(put by pending-blob-deletes) text blob)
+    =.  cards
+      [[%pass /iris/(scot %uv request-id) %arvo %i %request [%'DELETE' url.signed headers.signed ~] *outbound-config:iris] cards]
+    $(candidates t.candidates)
   ::
   ++  parse-body
     |=  req=inbound-request:eyre
@@ -697,7 +968,7 @@
     =/  values=(list record-value:atpro-repo-types)
       %+  turn  ~(tap by records)
       |=  [map-key=@t record=stored-record:atpro-pds]
-      [map-key (json-ipld value.record)]
+      [map-key (record-json-ipld value.record blobs)]
     =/  snap=repo-snapshot:atpro-repo-types
       (snapshot:atpro-repository did.config tid.next-tid head values private-key.config)
     =/  since=(unit @t)  rev
@@ -707,6 +978,7 @@
     =.  blocks  blocks.snap
     =.  car  car.snap
     =.  sequence  +(sequence)
+    =.  blobs  (sync-blob-references blobs records rev.snap)
     =.  history  [[head.snap rev.snap since blocks.snap car.snap sequence] history]
     =.  events  [[sequence rev.snap head.snap operation changed-key] events]
     this
@@ -747,8 +1019,16 @@
       (reply eyre-id (error-json 400 'InvalidSwap' 'swapRecord does not match the current record'))
     ?:  &(create-only ?=(^ existing))
       (reply eyre-id (error-json 400 'RecordAlreadyExists' 'record already exists'))
-    =/  stored=stored-record:atpro-pds  (make-stored u.collection rkey u.value)
-    =.  records  (~(put by records) key stored)
+    ?.  (record-blobs-valid u.value)
+      (reply eyre-id (error-json 400 'InvalidRequest' 'record contains a malformed blob reference'))
+    =/  value-blob-error=(unit @t)  (validate-refs (record-blobs u.value) blobs)
+    ?^  value-blob-error
+      (reply eyre-id (error-json 400 'InvalidRequest' u.value-blob-error))
+    =/  stored=stored-record:atpro-pds  (make-stored u.collection rkey u.value blobs)
+    =/  candidate=(map @t stored-record:atpro-pds)  (~(put by records) key stored)
+    =/  blob-error=(unit @t)  (validate-record-blobs candidate blobs)
+    ?^  blob-error  (reply eyre-id (error-json 400 'InvalidRequest' u.blob-error))
+    =.  records  candidate
     =.  this  (rebuild ?:(?=(^ existing) %update %create) key)
     (reply eyre-id (json-payload 200 (write-result stored)))
   ::
@@ -766,7 +1046,34 @@
       ?:  ?&  ?=(%'GET' method.request.req)
               ?=([%status ~] t.t.t.site)
           ==
-        (reply eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
+        (reply eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) (blob-bytes blobs) (lent ~(tap by pending-blob-deletes)) head rev sequence (lent history))))
+      ?:  ?&  ?=(%'POST' method.request.req)
+              ?=([%cleanup ~] t.t.t.site)
+          ==
+        =/  unix-now=@ud  (unix-seconds:atpro-oauth now.bowl)
+        =/  eligible=(list stored-blob:atpro-pds)
+          %+  turn
+            %+  skim  ~(tap by blobs)
+            |=  [cid-text=@t blob=stored-blob:atpro-pds]
+            (cleanup-eligible blob unix-now)
+          |=  [cid-text=@t blob=stored-blob:atpro-pds]
+          blob
+        =/  batch=(list stored-blob:atpro-pds)  (scag 50 eligible)
+        ?~  batch
+          (reply eyre-id (json-payload 200 (pairs:enjs:format ~[['scheduled' n+'0'] ['remaining' n+'0']])))
+        =/  settings=(unit [credentials=credentials:atpro-s3 configuration=configuration:atpro-s3])
+          (storage-settings our.bowl now.bowl)
+        ?~  settings
+          (reply eyre-id (error-json 503 'ServiceUnavailable' 'S3 credentials are not configured in Storage'))
+        =/  queued=[cards=(list card) next=_this]  (queue-deletes batch u.settings)
+        =.  this  next.queued
+        =/  result=json
+          %-  pairs:enjs:format
+          :~  ['scheduled' n+(decimal (lent batch))]
+              ['remaining' n+(decimal (sub (lent eligible) (lent batch)))]
+          ==
+        :_  this
+        (weld (give-simple-payload:app:server eyre-id (json-payload 202 result)) cards.queued)
       ?.  ?&  ?=(%'POST' method.request.req)
               ?=([%configure ~] t.t.t.site)
           ==
@@ -818,7 +1125,7 @@
       =?  this  &(u.enabled ?=(~ head))  (rebuild %init '')
       :_  this
       %+  weld
-        (give-simple-payload:app:server eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history))))
+        (give-simple-payload:app:server eyre-id (json-payload 200 (config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) (blob-bytes blobs) (lent ~(tap by pending-blob-deletes)) head rev sequence (lent history))))
       ~[(did-cache-card config)]
     ?.  enabled.config
       (reply eyre-id (error-json 503 'ServiceUnavailable' 'PDS is disabled'))
@@ -1059,6 +1366,74 @@
       ?.  |(?=(^ access) oauth-authorized)
         (reply eyre-id (error-json 401 'AuthenticationRequired' 'valid access token required'))
       (reply eyre-id (json-payload 200 (account-json config)))
+    ?:  =('app.bsky.actor.getPreferences' method)
+      ?.  ?=(%'GET' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      ?.  |(?=(^ access) oauth-authorized)
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'valid access token required'))
+      (reply eyre-id (json-payload 200 (frond:enjs:format 'preferences' a+preferences)))
+    ?:  =('com.atproto.server.getServiceAuth' method)
+      ?.  ?=(%'GET' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      ?.  |(?=(^ access) oauth-authorized)
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'valid access token required'))
+      =/  audience=(unit @t)  (arg-at 'aud' args.rl)
+      =/  raw-exp=(unit @t)  (arg-at 'exp' args.rl)
+      =/  requested-exp=(unit @ud)  ?~(raw-exp ~ (parse-decimal u.raw-exp))
+      =/  requested-method=(unit @t)  (arg-at 'lxm' args.rl)
+      ?.  ?&  ?=(^ audience)
+              (starts-with 'did:' u.audience)
+              (lte (met 3 u.audience) 2.048)
+          ==
+        (reply eyre-id (error-json 400 'InvalidRequest' 'aud must be a DID or DID service reference'))
+      ?:  ?&(?=(^ raw-exp) ?=(~ requested-exp))
+        (reply eyre-id (error-json 400 'BadExpiration' 'expiration must be an unsigned decimal integer'))
+      =/  expires=@ud  ?~(requested-exp (add unix-now 60) u.requested-exp)
+      ?:  ?|  (lte expires unix-now)
+              (gth expires (add unix-now 3.600))
+          ==
+        (reply eyre-id (error-json 400 'BadExpiration' 'expiration must be within the next hour'))
+      ?:  ?&  ?=(~ requested-method)
+              (gth expires (add unix-now 60))
+          ==
+        (reply eyre-id (error-json 400 'BadExpiration' 'a method-less token expires within one minute'))
+      =/  token-text=@t
+        %-  service-jwt
+        :*  did.config
+            u.audience
+            requested-method
+            unix-now
+            expires
+            (cat 3 eny.bowl session-count)
+            private-key.config
+        ==
+      =.  session-count  +(session-count)
+      (reply eyre-id (json-payload 200 (frond:enjs:format 'token' s+token-text)))
+    ?:  =('com.atproto.server.checkAccountStatus' method)
+      ?.  ?=(%'GET' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      ?.  |(?=(^ access) oauth-authorized)
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'valid access token required'))
+      =/  expected=(map @t (set @t))  (record-reference-map records)
+      =/  expected-count=@ud  (lent ~(tap by expected))
+      =/  imported-count=@ud
+        %+  roll  ~(tap by expected)
+        |=  [[cid-text=@t refs=(set @t)] total=@ud]
+        ?:  (~(has by blobs) cid-text)  +(total)
+        total
+      =/  status=json
+        %-  pairs:enjs:format
+        :~  ['activated' b+enabled.config]
+            ['validDid' b+(starts-with 'did:' did.config)]
+            ['repoCommit' s+(cid-text:atpro-repo (need head))]
+            ['repoRev' s+(need rev)]
+            ['repoBlocks' n+(decimal (lent blocks))]
+            ['indexedRecords' n+(decimal (lent ~(tap by records)))]
+            ['privateStateValues' n+(decimal (lent preferences))]
+            ['expectedBlobs' n+(decimal expected-count)]
+            ['importedBlobs' n+(decimal imported-count)]
+        ==
+      (reply eyre-id (json-payload 200 status))
     ?:  =('com.atproto.server.refreshSession' method)
       ?.  ?=(%'POST' method.request.req)
         (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
@@ -1128,18 +1503,18 @@
         record
       =/  asked-limit=(unit @ud)
         =/  raw=(unit @t)  (arg-at 'limit' args.rl)
-        ?~(raw ~ (slaw %ud u.raw))
+        ?~(raw ~ (parse-decimal u.raw))
       =/  limit=@ud  ?~(asked-limit 50 (min 100 (max 1 u.asked-limit)))
       =/  asked-offset=(unit @ud)
         =/  raw=(unit @t)  (arg-at 'cursor' args.rl)
-        ?~(raw ~ (slaw %ud u.raw))
+        ?~(raw ~ (parse-decimal u.raw))
       =/  offset=@ud  ?~(asked-offset 0 u.asked-offset)
       =/  remaining=(list stored-record:atpro-pds)  (slag offset matching)
       =/  page=(list stored-record:atpro-pds)  (scag limit remaining)
       =/  fields=(list [@t json])
         ~[['records' a+(turn page |=(record=stored-record:atpro-pds (record-json did.config record)))]]
       =?  fields  (gth (lent remaining) limit)
-        (snoc fields ['cursor' s+(scot %ud (add offset limit))])
+        (snoc fields ['cursor' s+(decimal (add offset limit))])
       (reply eyre-id (json-payload 200 (pairs:enjs:format fields)))
     ?:  =('com.atproto.sync.getLatestCommit' method)
       =/  requested=(unit @t)  (arg-at 'did' args.rl)
@@ -1182,11 +1557,25 @@
           ==
         (reply eyre-id (error-json 400 'RepoNotFound' 'repository is not hosted here'))
       =/  requested-since=(unit @t)  (arg-at 'since' args.rl)
-      =/  since-ok=?
-        ?~  requested-since  %.y
-        (lien history |=(version=repo-version:atpro-pds =(rev.version u.requested-since)))
-      ?.  since-ok
+      ?~  requested-since
+        (reply eyre-id (bytes-payload 'application/vnd.ipld.car' car))
+      =/  base=(unit repo-version:atpro-pds)  (find-version u.requested-since history)
+      ?~  base
         (reply eyre-id (error-json 400 'InvalidRequest' 'since revision is unavailable'))
+      =/  changed=(list block:atpro-repo-types)  (delta-blocks blocks blocks.u.base)
+      =/  incremental=octs  (car-v1-roots:atpro-repo ~[(need head)] changed)
+      (reply eyre-id (bytes-payload 'application/vnd.ipld.car' incremental))
+    ?:  =('com.atproto.sync.getRecord' method)
+      =/  requested-did=(unit @t)  (arg-at 'did' args.rl)
+      =/  collection=(unit @t)  (arg-at 'collection' args.rl)
+      =/  rkey=(unit @t)  (arg-at 'rkey' args.rl)
+      ?.  ?&  ?=(^ requested-did)
+              =(u.requested-did did.config)
+              ?=(^ collection)
+              ?=(^ rkey)
+          ==
+        (reply eyre-id (error-json 400 'InvalidRequest' 'invalid did, collection, or rkey'))
+      ::  The full current snapshot is a valid existence/non-existence proof.
       (reply eyre-id (bytes-payload 'application/vnd.ipld.car' car))
     ?:  =('com.atproto.sync.getBlocks' method)
       =/  requested-did=(unit @t)  (arg-at 'did' args.rl)
@@ -1243,20 +1632,33 @@
         (reply eyre-id (error-json 400 'InvalidRequest' 'since revision is unavailable'))
       =/  asked-limit=(unit @ud)
         =/  raw=(unit @t)  (arg-at 'limit' args.rl)
-        ?~(raw ~ (slaw %ud u.raw))
+        ?~(raw ~ (parse-decimal u.raw))
       =/  limit=@ud  ?~(asked-limit 500 (min 1.000 (max 1 u.asked-limit)))
       =/  asked-offset=(unit @ud)
         =/  raw=(unit @t)  (arg-at 'cursor' args.rl)
-        ?~(raw ~ (slaw %ud u.raw))
+        ?~(raw ~ (parse-decimal u.raw))
       =/  offset=@ud  ?~(asked-offset 0 u.asked-offset)
-      =/  all=(list [@t stored-blob:atpro-pds])  ~(tap by blobs)
+      =/  all=(list [@t stored-blob:atpro-pds])
+        %+  skim  ~(tap by blobs)
+        |=  [cid-text=@t blob=stored-blob:atpro-pds]
+        ?&  ?=(^ ~(tap in references.blob))
+            ?~  requested-since  %.y
+            ?~  referenced-at.blob  %.n
+            (gth u.referenced-at.blob u.requested-since)
+        ==
       =/  remaining=(list [@t stored-blob:atpro-pds])  (slag offset all)
       =/  page=(list [@t stored-blob:atpro-pds])  (scag limit remaining)
       =/  fields=(list [@t json])
         ~[['cids' a+(turn page |=([cid-text=@t blob=stored-blob:atpro-pds] s+cid-text))]]
       =?  fields  (gth (lent remaining) limit)
-        (snoc fields ['cursor' s+(scot %ud (add offset limit))])
+        (snoc fields ['cursor' s+(decimal (add offset limit))])
       (reply eyre-id (json-payload 200 (pairs:enjs:format fields)))
+    ?:  =('com.atproto.repo.listMissingBlobs' method)
+      ?.  ?=(%'GET' method.request.req)
+        (reply eyre-id (error-json 405 'MethodNotAllowed' 'method not allowed'))
+      ?.  |(?=(^ access) oauth-authorized)
+        (reply eyre-id (error-json 401 'AuthenticationRequired' 'valid access token required'))
+      (reply eyre-id (json-payload 200 (pairs:enjs:format ~[['blobs' a+~]])))
     ?.  ?=(%'POST' method.request.req)
       (reply eyre-id (error-json 404 'XRPCNotSupported' 'method not supported'))
     ?.  |(authenticated.req ?=(^ access) oauth-authorized)
@@ -1272,9 +1674,21 @@
         (reply eyre-id (error-json 400 'InvalidRequest' 'missing blob content type'))
       =/  cid=cid:atpro-repo-types  (cid-for-raw:atpro-repo u.body.request.req)
       =/  cid-text=@t  (cid-text:atpro-repo cid)
+      ?:  (~(has by pending-blob-deletes) cid-text)
+        (reply eyre-id (error-json 409 'BlobBusy' 'blob deletion is in progress'))
+      =/  existing=(unit stored-blob:atpro-pds)  (~(get by blobs) cid-text)
+      ?:  ?&(?=(^ existing) !=(u.content-type mime.u.existing))
+        (reply eyre-id (error-json 400 'InvalidMimeType' 'uploaded MIME type differs from the stored blob'))
+      =/  used=@ud  (add (blob-bytes blobs) (blob-bytes pending-blob-deletes))
+      ?:  ?&  ?=(~ existing)
+              (gth (add used p.u.body.request.req) 1.073.741.824)
+          ==
+        (reply eyre-id (error-json 413 'AccountQuotaExceeded' 'blob storage exceeds the 1 GiB account quota'))
       =/  object-key=@t  (rap 3 ~['atpro/' did.config '/' cid-text])
       =/  blob=stored-blob:atpro-pds
-        [cid u.content-type p.u.body.request.req object-key rev]
+        ?~  existing
+          [cid u.content-type p.u.body.request.req object-key unix-now %.n ~ *(set @t)]
+        [cid u.content-type p.u.body.request.req object-key uploaded-at.u.existing tethered.u.existing referenced-at.u.existing references.u.existing]
       =/  settings=(unit [credentials=credentials:atpro-s3 configuration=configuration:atpro-s3])
         (storage-settings our.bowl now.bowl)
       ?~  settings
@@ -1284,6 +1698,14 @@
       (queue-blob [%put eyre-id blob] [%'PUT' url.signed headers.signed `u.body.request.req])
     =/  jon=(unit json)  (parse-body req)
     ?~  jon  (reply eyre-id (error-json 400 'InvalidRequest' 'invalid JSON body'))
+    ?:  =('app.bsky.actor.putPreferences' method)
+      =/  supplied=(unit json)  (json-at 'preferences' u.jon)
+      ?.  ?&(?=(^ supplied) ?=(%a -.u.supplied))
+        (reply eyre-id (error-json 400 'InvalidRequest' 'preferences must be an array'))
+      ?:  (gth (lent p.u.supplied) 100)
+        (reply eyre-id (error-json 400 'InvalidRequest' 'preferences exceed the 100-item limit'))
+      =.  preferences  p.u.supplied
+      (reply eyre-id (json-payload 200 ~))
     ?:  =('com.atproto.repo.createRecord' method)
       (put-record eyre-id u.jon %.y)
     ?:  =('com.atproto.repo.putRecord' method)
@@ -1328,12 +1750,14 @@
       =/  working=(map @t stored-record:atpro-pds)  records
       |-
       ?~  items
+        =/  blob-error=(unit @t)  (validate-record-blobs working blobs)
+        ?^  blob-error  (reply eyre-id (error-json 400 'InvalidRequest' u.blob-error))
         =.  records  working
         =.  this  (rebuild %apply '')
         =/  commit=json
           (pairs:enjs:format ~[['cid' s+(cid-text:atpro-repo (need head))] ['rev' s+(need rev)]])
         (reply eyre-id (json-payload 200 (pairs:enjs:format ~[['commit' commit] ['results' a+~]])))
-      =/  next=(unit (map @t stored-record:atpro-pds))  (apply-write i.items working)
+      =/  next=(unit (map @t stored-record:atpro-pds))  (apply-write i.items working blobs)
       ?~  next
         (reply eyre-id (error-json 400 'InvalidRequest' 'invalid write operation'))
       $(items t.items, working u.next)
@@ -1352,7 +1776,7 @@
   ^-  (unit (unit cage))
   ?+  path  [~ ~]
       [%x %status ~]
-    ``json+!>((config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) head rev sequence (lent history)))
+    ``json+!>((config-json config auth (lent ~(tap by sessions)) (lent ~(tap by oauth-sessions)) (lent ~(tap by oauth-requests)) (lent ~(tap by records)) (lent ~(tap by blobs)) (blob-bytes blobs) (lent ~(tap by pending-blob-deletes)) head rev sequence (lent history)))
   ==
 ::
 ++  on-leave  on-leave:def
@@ -1373,6 +1797,19 @@
     =/  context=(unit blob-request)  (~(get by in-flight) u.request-id)
     ?~  context  `this
     =.  in-flight  (~(del by in-flight) u.request-id)
+    ?:  ?=(%delete -.u.context)
+      =/  deleting=[%delete blob=stored-blob:atpro-pds]  u.context
+      =/  text=@t  (cid-text:atpro-repo cid.blob.deleting)
+      =/  succeeded=?
+        ?.  ?=([%iris %http-response *] sign)  %.n
+        =/  response=client-response:iris  client-response.sign
+        ?.  ?=(%finished -.response)  %.n
+        =/  status=@ud  status-code.response-header.response
+        &((gte status 200) (lth status 300))
+      =.  pending-blob-deletes  (~(del by pending-blob-deletes) text)
+      =?  blobs  !succeeded
+        (~(put by blobs) text blob.deleting)
+      [~ this]
     =/  eyre-id=@ta
       ?-  -.u.context
           %put  eyre-id.u.context

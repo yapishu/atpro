@@ -24,18 +24,22 @@ Eyre session. The server is disabled by default. Enabling requires a
 
 1. repository storage using AT's Merkle Search Tree representation and P-256
    signed commits;
-2. CAR export, block reads, repository sync, record writes, and blob storage
-   through the ship's configured S3-compatible service;
+2. full and incremental CAR export, block reads, repository sync, record writes,
+   and reference-checked blob storage through the ship's configured
+   S3-compatible service;
 3. app-password sessions and an OAuth authorization server with PAR,
    ship-authenticated consent, PKCE-S256, ES256 DPoP, and refresh rotation;
 4. protected-resource metadata and an `AtprotoPersonalDataServer` service in
    the public `did:web` document;
 5. sequenced mutation events retained for the federation edge.
+6. private account preferences and migration-oriented repository/blob counts.
 
-Eyre serves all HTTP endpoints. Relay crawling still requires the WebSocket
-edge described below. Blob reference cleanup and quotas, incremental sync
-ranges, native-app OAuth clients, backups, account import/export, and abuse
-controls remain operational work.
+Eyre serves all HTTP endpoints. Blob storage enforces 50 MiB per object and
+1 GiB per account, tracks record references, gives untethered uploads a 24-hour
+grace period, and deletes eligible objects in authenticated cleanup batches.
+Relay crawling still requires the WebSocket edge described below. Native-app
+OAuth clients, automatic cleanup scheduling, backups, account import/export,
+and abuse controls remain operational work.
 
 Eyre has one exact `/.well-known/did.json` response per ship endpoint. Enable
 either the Feed Generator DID publisher or the PDS DID publisher for a given
