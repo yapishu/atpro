@@ -42,16 +42,15 @@ The Relay event stream and Jetstream live stream require a WebSocket client.
 Vere does not expose one to ordinary Gall agents, so `%atpro` does not pretend
 to offer a native firehose. The UI uses explicit refreshes.
 
-The preferred future path is an optional Tap companion:
+The optional realtime path uses a small adapter:
 
 ```text
-Relay / Jetstream WebSocket -> Tap filter -> authenticated HTTP webhook -> %atpro
+Relay / Jetstream WebSocket -> Tap filter -> authenticated HTTP webhook -> %atpro-relay -> Gall/Ames
 ```
 
-This keeps the native desk useful without a sidecar, lets Tap handle cursor
-resume and backpressure, and delivers only events relevant to the connected
-account. Jetstream v2's HTTP snapshot API may later provide bulk catch-up, but
-its `.jss` segments and metered access make it a separate ingestion feature.
+`%atpro-relay` deduplicates by source/cursor, persists a bounded queue, and
+publishes typed facts to allowlisted subscribers. The adapter owns socket
+reconnect, cursor resume, and backpressure.
 
 ## Credential boundary
 
@@ -68,18 +67,15 @@ The RPC bridge accepts two destinations:
 The bridge accepts only GET/POST and NSID-shaped method names. Arbitrary
 destination URLs are not accepted.
 
-## Authentication phases
+## Authentication
 
-The greenfield desk starts with app-password sessions because they fit Urbit's
-existing HTTP and JSON capabilities and make the credential boundary easy to
-audit.
+The desk supports both app-password sessions and full AT Protocol
+OAuth. OAuth discovery resolves handles and DID documents, validates PDS and
+issuer metadata, and uses PKCE, PAR, ES256 DPoP proofs, `ath`, and separate
+authorization-server/PDS nonce state. Tokens and the private P-256 key never
+cross the Gall/browser boundary.
 
-OAuth should be a separate phase. The AT Protocol profile requires PKCE, PAR,
-DPoP proofs and nonce retry behavior. The local OAuth references are useful
-for redirect/state plumbing, but their JOSE support does not by itself satisfy
-the asymmetric signing profile required by AT Protocol.
-
-## Implemented second slice
+## Capabilities
 
 - profiles, author feeds, threads, replies, notifications, follows, likes, and
   reposts in the browser client;
@@ -88,16 +84,16 @@ the asymmetric signing profile required by AT Protocol.
   DID document caching, authenticated configuration, curated posts, and cursor
   pagination.
 
-## Next implementation slices
+## Roadmap
 
-1. Add typed Gall actions and marks for ship-native callers, sharing the same
-   policy checks as HTTP.
-2. Add binary-safe blob upload and image-post composition.
-3. Add handle/DID resolution so the PDS origin can be discovered automatically.
-4. Add the optional Tap webhook, cursor persistence, deduplication, and a
-   bounded event queue.
-5. Add an Ames distribution layer for filtered AT event and curation messages.
-6. Add OAuth only after suitable P-256 or secp256k1 signing primitives exist.
+1. Add typed client actions for ship-native XRPC callers, sharing the same
+   destination and NSID policy as HTTP.
+2. Build the PDS repository core: DAG-CBOR, CID/CAR, MST, signed commits, and
+   conformance vectors.
+3. Add blob storage, repository/account XRPC, OAuth provider behavior, and DID
+   service/key lifecycle.
+4. Expose sync HTTP through Eyre and pair it with a small WebSocket edge for
+   `com.atproto.sync.subscribeRepos` federation.
 
 ## Upstream references
 

@@ -235,6 +235,20 @@
           <div class="subhead">curated post URIs</div>
           <form id="serverPostForm" class="search-box"><input id="serverPostUri" placeholder="at://did:.../app.bsky.feed.post/..." required><button class="primary">add</button></form>
           <div id="serverPosts"><div class="empty">No posts.</div></div>
+          <div class="section-head"><h2>event relay</h2></div>
+          <div id="relayStatus" class="server-status">relay state not loaded</div>
+          <form id="relayForm" class="form-body">
+            <label for="relayToken">webhook bearer token</label>
+            <input id="relayToken" type="password" autocomplete="new-password" placeholder="leave blank to preserve the current token">
+            <label for="relayUpstream">upstream Ames ship</label>
+            <input id="relayUpstream" placeholder="~sampel-palnet (blank for gateway mode)">
+            <label for="relayAllow">ships allowed to subscribe (comma separated)</label>
+            <input id="relayAllow" placeholder="~sampel-palnet, ~sampel">
+            <label for="relayMax">bounded event history</label>
+            <input id="relayMax" inputmode="numeric" value="250" required>
+            <label><input id="relayEnabled" type="checkbox" style="width:auto"> accept adapter webhooks</label>
+            <div class="form-row"><button class="primary">save relay config</button><button id="clearRelay" class="danger" type="button">clear events</button></div>
+          </form>
         </section>
         <section id="thread" class="view">
           <div class="section-head"><h2>thread</h2><button class="back-link" data-back="timeline">&lt;- back</button></div>
@@ -259,6 +273,7 @@
     let currentThread = null;
     let currentGraph = null;
     let serverState = null;
+    let relayState = null;
 
     function escapeHtml(value = '') {
       return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -279,6 +294,13 @@
     }
     async function serverApi(path, body) {
       const response = await fetch(`/apps/atpro/server/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:body === undefined ? {} : {'content-type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
+      const text = await response.text(); let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = {error:text || `HTTP ${response.status}`}; }
+      if (!response.ok) throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
+      return data;
+    }
+    async function relayApi(path, body) {
+      const response = await fetch(`/apps/atpro/relay/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:body === undefined ? {} : {'content-type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
       const text = await response.text(); let data;
       try { data = text ? JSON.parse(text) : null; } catch { data = {error:text || `HTTP ${response.status}`}; }
       if (!response.ok) throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
@@ -460,10 +482,20 @@
       $('#serverStatus').textContent = state.enabled ? `live: ${state.endpoint}` : 'disabled — configuration is private until enabled';
       $('#serverPosts').innerHTML = state.posts?.length ? state.posts.map(post => `<div class="server-post"><code>${escapeHtml(post)}</code><button class="danger" data-remove-post="${escapeHtml(post)}">remove</button></div>`).join('') : '<div class="empty">No posts.</div>';
     }
+    function renderRelay(state) {
+      relayState = state;
+      $('#relayEnabled').checked = !!state.enabled;
+      $('#relayUpstream').value = state.upstream || '';
+      $('#relayAllow').value = (state.allowlist || []).join(', ');
+      $('#relayMax').value = state.maxEvents || '250';
+      $('#relayToken').value = '';
+      $('#relayStatus').textContent = `${state.enabled ? 'webhook live' : 'webhook disabled'} · ${state.eventCount || 0} events · ${state.hasToken ? 'token set' : 'no token'} · ${state.upstream ? `following ${state.upstream}` : 'gateway mode'}`;
+    }
     async function loadServer() {
       showView('serve');
-      try { renderServer(await serverApi('status')); }
-      catch (error) { $('#serverStatus').textContent = error.message; notice(error.message, true); }
+      const [feed, relay] = await Promise.allSettled([serverApi('status'), relayApi('status')]);
+      if (feed.status === 'fulfilled') renderServer(feed.value); else $('#serverStatus').textContent = feed.reason.message;
+      if (relay.status === 'fulfilled') renderRelay(relay.value); else $('#relayStatus').textContent = relay.reason.message;
     }
     function parseAtUri(uri) {
       const match = String(uri).match(/^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/);
@@ -569,6 +601,15 @@
       catch (error) { notice(error.message, true); }
       finally { button.disabled = false; }
     });
+    $('#relayForm').addEventListener('submit', async event => {
+      event.preventDefault(); const button = event.submitter; button.disabled = true;
+      const body = {enabled:$('#relayEnabled').checked, upstream:$('#relayUpstream').value.trim(), maxEvents:$('#relayMax').value.trim(), allowlist:$('#relayAllow').value.split(',').map(item => item.trim()).filter(Boolean)};
+      if ($('#relayToken').value) body.token = $('#relayToken').value;
+      try { renderRelay(await relayApi('configure', body)); notice('Relay configuration saved'); }
+      catch (error) { notice(error.message, true); }
+      finally { button.disabled = false; }
+    });
+    $('#clearRelay').addEventListener('click', async () => { try { renderRelay(await relayApi('clear', {})); notice('Relay events cleared'); } catch (error) { notice(error.message, true); } });
     $('#serverPostForm').addEventListener('submit', async event => {
       event.preventDefault(); const post = $('#serverPostUri').value.trim();
       try { renderServer(await serverApi('add-post',{post})); $('#serverPostUri').value = ''; }

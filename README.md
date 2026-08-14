@@ -1,21 +1,26 @@
 # `%atpro`
 
+<img width="1200" height="701" alt="image" src="https://github.com/user-attachments/assets/d94322ec-1c27-4dbd-a4cd-08edd7a0ecf8" />
+
 `%atpro` is a native AT Protocol client desk for Urbit. It connects to a
 Personal Data Server (PDS) over HTTPS/XRPC, keeps session credentials inside a
 Gall agent, and serves a small same-origin browser client.
 
-The first working slice supports:
+The desk supports:
 
 - app-password login against `https://bsky.social` or another HTTPS PDS;
+- AT Protocol OAuth with PKCE, PAR, ES256 DPoP, nonce retry, and refresh;
 - persisted access and refresh JWTs, never returned to browser JavaScript;
 - timeline reads and manual refresh;
 - public actor search;
 - profile and thread navigation;
 - text posts and replies;
+- image blob upload and image posts;
 - likes, reposts, follows, and notifications;
 - local session refresh and disconnect;
 - a constrained GET/POST XRPC bridge for authenticated Urbit users.
 - an optional AT Feed Generator served publicly through Eyre.
+- an optional token-protected event webhook and Ames/Gall relay.
 
 ## Architecture
 
@@ -34,27 +39,23 @@ general-purpose HTTP proxy. `%atpro-fileserver` serves `/desk/web` at
 
 Vere does not currently expose a WebSocket client to userspace, while AT
 Protocol's Relay firehose and Jetstream live streams are WebSocket services.
-The native desk therefore uses ordinary HTTPS and manual refresh. This does
-not limit login, reads, writes, repository operations, identity resolution, or
-most XRPC calls.
-
-A future realtime adapter should run Tap (or another small external consumer)
-and deliver filtered events to an authenticated HTTP webhook on the ship.
-Jetstream v2 snapshots are HTTP-accessible but use the `.jss` snapshot format
-and are better suited to bulk catch-up than this client MVP.
+The native client therefore uses ordinary HTTPS and explicit refresh. This
+does not limit login, reads, writes, repository operations, identity
+resolution, or most XRPC calls. `%atpro-relay` provides the WebSocket boundary:
+Tap (or another small external consumer) posts filtered events to a
+token-protected Eyre hook, and the ship redistributes them to allowlisted ships
+through Gall subscriptions.
 
 ## Authentication
 
-Use a Bluesky app password, not the account's main password. The password is
-sent once to `com.atproto.server.createSession`; returned JWTs are held in
-Gall state. Browser status responses contain only service, DID, and handle.
+OAuth is the preferred sign-in mode on public HTTPS origins. `%atpro` performs
+handle/DID and authorization-server discovery, PKCE, PAR, P-256 DPoP signing,
+nonce retries, token exchange, and refresh. The private DPoP key and both
+tokens remain in Gall state.
 
-AT Protocol OAuth is intentionally deferred. A conforming implementation
-needs PKCE, PAR, DPoP, nonce handling, and asymmetric key support beyond the
-RSA-only JOSE primitives currently available in the referenced Urbit desks.
-The UI exposes an HTTPS-only preference hook, but labels it as unavailable
-until the DPoP signer is implemented; it does not silently downgrade AT OAuth
-to ordinary bearer-token OAuth.
+App-password login remains available as a fallback. Use a Bluesky app
+password, not the account's main password. Browser status responses contain
+only the service, DID, handle, and authentication mode.
 
 ## Feed Generator server mode
 
@@ -71,9 +72,17 @@ repository. The UI can publish that record and curate post URIs. Server mode
 remains disabled until explicitly configured.
 
 Running it on the public network requires a stable HTTPS hostname that reaches
-Eyre. A full PDS remains a later project because it additionally requires
-signed repositories/MSTs, CAR sync, blob storage, account and identity
-lifecycle, federation ingestion, and operational availability.
+Eyre. The PDS track adds signed repositories/MSTs, CAR sync, blob storage,
+account and identity lifecycle, and federation availability.
+
+## Event relay mode
+
+`%atpro-relay` accepts normalized events at `POST /apps/atpro/hook` when the
+hook is explicitly enabled and the request has its configured Bearer token.
+Configure it in the `%serve` screen. Events are deduplicated by source/cursor,
+kept in a bounded queue, and published as `%atpro-event` facts on `/events`.
+An allowlist controls downstream Ames subscribers; an optional upstream ship
+turns an instance into a follower of another `%atpro-relay` gateway.
 
 ## Build and install
 
@@ -104,6 +113,10 @@ All routes require an authenticated Eyre session.
 - `POST /apps/atpro/api/refresh`
 - `POST /apps/atpro/api/logout`
 - `POST /apps/atpro/api/rpc`
+- `POST /apps/atpro/api/blob`
+- `POST /apps/atpro/api/oauth/start`
+- `GET /apps/atpro/api/oauth/callback`
+- `GET /apps/atpro/api/oauth/client-metadata`
 
 The RPC body is `{target, method, nsid, query?, body?}`. `target` is `public`
 or `pds`, and `method` is `GET` or `POST`.
