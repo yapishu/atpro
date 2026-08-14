@@ -13,11 +13,14 @@ The desk supports:
 - persisted access and refresh JWTs, never returned to browser JavaScript;
 - timeline reads and manual refresh;
 - public actor search;
-- profile and thread navigation;
+- profile and thread navigation, with post/reply feeds and private access to
+  the connected account's likes;
 - text posts and replies;
 - image blob upload and image posts;
 - likes, reposts, follows, and notifications;
 - local session refresh and disconnect;
+- route-aware browser history so hardware back/forward buttons traverse app
+  views without leaving the app;
 - explicit AT identity publication and one-shot contact discovery;
 - a constrained GET/POST XRPC bridge for authenticated Urbit users;
 - an optional AT Feed Generator served publicly through Eyre;
@@ -39,6 +42,12 @@ Eyre session. It can choose only the public AppView or the connected PDS,
 GET/POST, and a syntactically valid NSID, so it cannot turn the ship into a
 general-purpose HTTP proxy. `%atpro-fileserver` serves `/desk/web` at
 `/apps/atpro` using the %fileserver pattern.
+
+The browser application is a React/Vite project in `fe/`. API helpers and the
+post, profile, and service-control components are separate modules. The root
+Zig build runs Vite first and writes fixed Clay-safe `app.js` and `app.css`
+assets into `desk/web`; generated desk assets are the distribution rather than
+the frontend source of truth.
 
 ## Realtime limitation
 
@@ -180,9 +189,13 @@ It does not poll or automatically follow accounts.
 The build requires Zig 0.15.2 and Git 2.25 or newer.
 
 ```sh
+cd fe && npm install && cd ..
 zig build
 zig build -Ddesk="$HOME/.urbit/PIER/atpro"
 ```
+
+For frontend development, `npm run dev --prefix fe` starts Vite and proxies
+`/apps/atpro` and `/xrpc` requests to local Eyre.
 
 Commit the mounted desk and install it from the ship:
 

@@ -108,6 +108,7 @@ pub fn build(b: *std.Build) void {
 
 fn buildDesk(step: *std.Build.Step, allocator: std.mem.Allocator, install_path: []const u8, copy_target: ?[]const u8) !void {
     try requireGitVersion(step);
+    if (pathExists("fe/package.json")) try buildFrontend(step);
 
     if (!pathExists("desk") and !pathExists("desk-dev")) {
         return step.fail("neither /desk nor /desk-dev directory found", .{});
@@ -138,6 +139,22 @@ fn buildDesk(step: *std.Build.Step, allocator: std.mem.Allocator, install_path: 
     if (copy_target) |target| {
         const target_path = try expandHomePath(allocator, step, target);
         try copyInstallPrefixToTarget(allocator, step, install_path, target_path);
+    }
+}
+
+fn buildFrontend(step: *std.Build.Step) !void {
+    if (!pathExists("fe/node_modules/.bin/vite")) {
+        const install = std.process.Child.run(.{ .allocator = step.owner.allocator, .argv = &.{ "npm", "install", "--prefix", "fe" }, .max_output_bytes = 1024 * 1024 }) catch |err| return step.fail("failed to install frontend dependencies: {s}", .{@errorName(err)});
+        if (install.term != .Exited or install.term.Exited != 0) {
+            std.debug.print("{s}{s}", .{ install.stdout, install.stderr });
+            return step.fail("frontend dependency installation failed", .{});
+        }
+    }
+    std.debug.print("Building React frontend...\n", .{});
+    const result = std.process.Child.run(.{ .allocator = step.owner.allocator, .argv = &.{ "npm", "run", "build", "--prefix", "fe" }, .max_output_bytes = 1024 * 1024 }) catch |err| return step.fail("failed to build frontend: {s}", .{@errorName(err)});
+    if (result.term != .Exited or result.term.Exited != 0) {
+        std.debug.print("{s}{s}", .{ result.stdout, result.stderr });
+        return step.fail("frontend build failed", .{});
     }
 }
 

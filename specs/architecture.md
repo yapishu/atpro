@@ -18,6 +18,11 @@ The constrained bridge exposes GET and POST JSON XRPC. Image blobs use a
 separate binary-safe upload route, and CAR repository sync uses dedicated PDS
 routes rather than passing through the JSON bridge.
 
+The web client is built from the React/Vite project in `fe/`. Components own
+posts, profile feeds, and service administration; the application shell owns
+session state and route-aware browser history. Vite emits flat Clay-safe assets
+into `desk/web`, which `%atpro-fileserver` serves without a Node runtime.
+
 ## Network model
 
 AT Protocol is a federated network of independently operated services. A
@@ -77,8 +82,8 @@ cross the Gall/browser boundary.
 
 ## Capabilities
 
-- profiles, author feeds, threads, replies, notifications, follows, likes, and
-  reposts in the browser client;
+- profiles, filtered author post/reply feeds, the connected account's likes,
+  threads, notifications, follows, likes, and reposts in the browser client;
 - one refresh-and-retry after an authenticated PDS request returns 401;
 - explicit public handle/DID publication through Gall scry and one-shot
   discovery across `%contacts`, with an empty result when Landscape is absent;
